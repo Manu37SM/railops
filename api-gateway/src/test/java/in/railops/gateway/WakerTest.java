@@ -134,6 +134,14 @@ class WakerTest {
     }
 
     @Test
+    void theDefaultPortIsTheSameService() {
+        assertThat(Waker.base(URI.create("https://railops-identity.onrender.com:443/api/v1/auth/login")))
+                .isEqualTo(Waker.base(URI.create("https://railops-identity.onrender.com")));
+        assertThat(Waker.base(URI.create("http://x.example:80/a"))).isEqualTo(URI.create("http://x.example"));
+        assertThat(Waker.base(URI.create("http://x.example:8080/a"))).isEqualTo(URI.create("http://x.example:8080"));
+    }
+
+    @Test
     void onlyTheHostsHtmlErrorPageDoesNotCountAsTheServiceAnswering() {
         assertThat(GatewayApplication.cameFromService(200, MediaType.APPLICATION_JSON)).isTrue();
         assertThat(GatewayApplication.cameFromService(401, null)).isTrue();

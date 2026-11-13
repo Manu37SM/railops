@@ -1,0 +1,12 @@
+# Accepted findings for CI's Trivy image scan. Every entry needs a reason and an expiry (exp:), so it comes back.
+#
+# Spring Framework 6.2.x is out of OSS support; these are fixed only in 7.0.9 (Spring Boot 4). Moving to Boot 4 is a
+# major upgrade (Jackson 3, Spring Cloud Gateway 5) and is planned separately. None of the vulnerable features is used:
+#   CVE-2026-47890  SSE rendering of view fragments (MVC/WebFlux). RailOps services return JSON only; no view layer.
+#   CVE-2026-47884  XsltView path handling (MVC). No XsltView or any server-side views anywhere.
+#   CVE-2026-47892  Header predicates in WebFlux *functional endpoints* (RouterFunction/RequestPredicates). The gateway
+#                   routes with Spring Cloud Gateway's own predicates; no RouterFunction is declared.
+# Re-check with: grep -rn 'RouterFunction\|RequestPredicates\|XsltView\|FragmentsRendering\|ModelAndView' --include=*.java .
+CVE-2026-47890 exp:2027-02-28
+CVE-2026-47884 exp:2027-02-28
+CVE-2026-47892 exp:2027-02-28

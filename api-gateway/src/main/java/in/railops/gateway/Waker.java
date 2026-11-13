@@ -76,7 +76,11 @@ public class Waker {
 
     /** scheme://host[:port] of a URL: the service, not the path. */
     static URI base(URI u) {
-        return URI.create(u.getScheme() + "://" + u.getRawAuthority());
+        // The routed request URL carries the port (https://host:443); the configured one usually doesn't. Same service.
+        int port = u.getPort();
+        boolean defaultPort = port == -1 || ("https".equals(u.getScheme()) && port == 443)
+                || ("http".equals(u.getScheme()) && port == 80);
+        return URI.create(u.getScheme() + "://" + u.getHost() + (defaultPort ? "" : ":" + port));
     }
 
     /** Wakes every service, without waiting. At most once per {@link #nudgeEvery} unless {@code force}. */
