@@ -30,7 +30,7 @@ public class HttpRailLensAccounts implements RailLensAccounts {
                                 @Value("${railops.raillens.base-url:http://localhost:8080/api/v1}") String baseUrl) {
         var rf = new SimpleClientHttpRequestFactory();
         rf.setConnectTimeout(Duration.ofSeconds(5));
-        rf.setReadTimeout(Duration.ofSeconds(70));   // RailLens on a free plan may need a minute to wake up
+        rf.setReadTimeout(Duration.ofSeconds(120));  // RailLens on a free plan may need 1-2 minutes to wake up (gateway allows 130 s)
         this.client = builder.baseUrl(baseUrl).requestFactory(rf).build();
     }
 

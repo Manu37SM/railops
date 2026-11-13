@@ -283,7 +283,7 @@ RailOps reads train timetables from **RailLens**. In `render.env`, `RAILLENS_API
 Prices change. Check each provider's pricing page before relying on these numbers.
 
 **Known limits of this setup:**
-- **Cold starts (Demo):** the first visit after 15 quiet minutes waits about a minute per sleeping service. A request can time out while a service it depends on is still waking. Wait a minute and retry.
+- **Cold starts (Demo):** each Free service sleeps after 15 quiet minutes. The gateway handles this (`RAILOPS_EDGE_WAKE_ENABLED`, set by `print-env.sh`): when it wakes it immediately wakes identity, reservation, payment and notification **in parallel**; before forwarding a request it **waits** for a sleeping service (up to 75 s) instead of passing on Render's error page; and while requests keep coming it pings every service every 10 minutes so none falls asleep mid-session. Nothing is retried, so a booking or payment is never sent twice. When nobody uses the system everything still sleeps, so free hours aren't spent. The very first visit after a long quiet spell still waits about a minute; a client with a shorter timeout (the RailLens website gives RailOps 25 s per call) may need one retry.
 - **Paused background work (Demo):** while reservation sleeps, unpaid holds aren't released on time and charts aren't prepared on schedule. They catch up when it wakes. This is fine for a demo, but not for real passengers.
 - **Fake payments only.** Real payments need a payment-provider adapter (Phase 15 "Deferred").
 - **Client IP for rate limits:** fixed in Phase 3B. The gateway reads `True-Client-IP` (set by Cloudflare in front of Render), and only when the request came through Render's proxy. `print-env.sh` sets this for you.
@@ -304,7 +304,8 @@ Prices change. Check each provider's pricing page before relying on these number
 | Service restarts with *OutOfMemory* | 512 MB was too small for it | Switch that service to **Standard** (2 GB) |
 | Browser: login works but you're logged out on refresh | Rewrite rule missing, so the API isn't same-site | Step 9 rewrite `/api/*` must be first |
 | Browser console: *Refused to connect* (CSP) | The app calls the gateway URL directly | Same fix: the `/api/*` rewrite |
-| Everything is slow the first time | Free services waking up | Normal in Demo mode |
+| Everything is slow the first time | Free services waking up | Normal in Demo mode. The gateway log shows `... is awake (took N ms)` as each one starts |
+| "The service had a problem" right after a quiet spell | A service was asleep and the gateway didn't wait for it | Check the gateway has `RAILOPS_EDGE_WAKE_ENABLED=true` (re-run `print-env.sh gateway`). Retry once: the services are waking |
 | Free services suspended late in the month | 750 free hours used up | Fewer always-awake services, or move to Reliable mode |
 
 ## Going from Demo to Reliable later

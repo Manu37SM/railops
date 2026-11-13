@@ -29,7 +29,7 @@ Update this table whenever you merge or deploy. (I'll update it at the end of ev
 | Change | Repo | Merged to main/master? | Live? | Needs before going live |
 |---|---|---|---|---|
 | Phase 0: IP detection behind Render, admin key needed for catalogue writes, HSTS | `train-db` | ✅ yes | ❓ check (see below) | env var `RAILLENS_CLIENT_IP_TRUSTED_HEADER` (Section 6) |
-| Phase 1: Spring Security "deny by default", safer refresh tokens (DB migration **V6**) | `train-db` | ✅ yes | ❓ check | the database check in Section 5 |
+| Phase 1: Spring Security "deny by default", safer refresh tokens (DB migration **V6**) | `train-db` | ✅ yes | ✅ live | the database check in Section 5 |
 | Phase 2A: admin accounts + one-time codes (DB migration **V7**) | `train-db` | ⏳ branch `security/phase2a-admin-mfa` | ❌ no | 2 new env vars (Section 6) |
 | Phase 2A: admin sign-in screens | `train-db-frontend` | ⏳ branch `security/phase2a-admin-mfa` | ❌ no | backend Phase 2A live first |
 | Phase 2A: admin sign-in screens | `train-db-mobile` | ⏳ branch `security/phase2a-admin-mfa` | ❌ no | backend Phase 2A live first, then build a new APK |
@@ -59,6 +59,13 @@ Update this table whenever you merge or deploy. (I'll update it at the end of ev
 - **Backend:** Render → `raillens-train-db` → **Events**. The newest "Deploy live" line shows the commit. Compare it with `git log` in `train-db`.
 - **Website:** Vercel → your project → **Deployments**. The one marked *Production* shows its commit.
 - **App:** whatever APK you last shared.
+
+---
+
+**To do later (noted 13 Nov 2026):**
+- RailLens backend: move the memory settings from `JAVA_TOOL_OPTIONS` into the `Dockerfile`; load the timetable snapshot (`ScheduleSnapshotService`) with one joined query instead of per-train/per-station lookups; build it at startup so the first visitor after a wake-up doesn't wait about 40 s for stats, rankings or the network map.
+- RailLens backend runs in Render **Oregon** but its database is in Neon **Sydney**: every query crosses the Pacific. Recreating the backend in Singapore (and moving the database to Singapore) would speed up everything.
+- RailOps staff app: show the authenticator setup as a **QR code** people can scan, instead of only the text key. Applies to RailOps MFA enrolment, which RailLens admins also use after the 4D switch.
 
 ---
 
@@ -151,6 +158,8 @@ Render → `raillens-train-db` → **Environment**. `render.yaml` lists them too
 | `RAILLENS_RAILOPS_JWKS_URL` | **Leave unset until RailOps is live.** Then: RailOps identity URL + `/.well-known/jwks.json` (e.g. `https://railops-identity.onrender.com/.well-known/jwks.json`) | no | **Phase 4B** |
 | `RAILLENS_RAILOPS_ISSUER` | Set together with the line above: exactly RailOps' `JWT_ISSUER` (on Render, the identity service's URL, e.g. `https://railops-identity.onrender.com`) | no | **Phase 4B** |
 | `RAILLENS_AUTH_LOCKOUT_MAX_MINUTES` | Usually **leave unset** (1440 = 24 hours). Longest lockout after repeated lockouts in a row | no | **Phase 6** |
+| `JAVA_TOOL_OPTIONS` | `-Xmx224m -XX:MaxMetaspaceSize=180m -Xss512k -XX:+UseSerialGC -XX:ReservedCodeCacheSize=64m -XX:MaxDirectMemorySize=32m -XX:TieredStopAtLevel=1 -Dspring.jpa.properties.hibernate.default_batch_fetch_size=500`. Keeps the backend under the free plan's 512 MB (without it Render killed it for running out of memory on 12 and 13 Nov) and lets the timetable snapshot load in about 40 s instead of never | no | **13 Nov 2026** |
+| `MALLOC_ARENA_MAX` | `2` (less memory outside Java's heap) | no | **13 Nov 2026** |
 | `RAILLENS_RAILOPS_API_URL` | Usually **leave unset**: it then uses `RAILLENS_RAILOPS_ISSUER`, which is the right address on Render. Where password changes and account closing for linked accounts are sent | no | **Phase 4D** |
 
 `openssl` comes with **Git Bash** on Windows.
@@ -403,6 +412,7 @@ Only when **all** of these are true: the Phase 2A website is live, every admin h
 | 13 Nov 2026 | Phase 4A in the tracker; new section 9b announcing the single-login plan and its one breaking step (4D). |
 | 13 Nov 2026 | Phase 4B: new branch and merge order, migration V8, two optional backend settings (leave unset until RailOps is live). |
 | 13 Nov 2026 | Phase 4C: account move (tracker, merge order, the three-step order in 9b). |
+| 13 Nov 2026 | RailOps deployed and live on Render. RailLens backend: everything up to Phase 6 merged and live (V8 to V10 applied); memory fix (`JAVA_TOOL_OPTIONS`, `MALLOC_ARENA_MAX`) after out-of-memory crashes; follow-ups listed under Section 2. |
 | 13 Nov 2026 | RailOps: Kafka partition cap for Confluent Basic (`KAFKA_MAX_PARTITIONS`), Basic-not-Standard warning, Neon project set up. |
 | 13 Nov 2026 | RailOps first deploy: Redis Cloud free instead of Render Key Value (the workspace's one free Key Value is taken), region note, `REDIS_PASSWORD`/`REDIS_USERNAME`/`REDIS_SSL` in `render.env`. |
 | 13 Nov 2026 | Phase 6: Razorpay test mode (new Section 9d), seats and coach sets, audit log and progressive lockout (backend setting), CSP and audit smoke checks, four troubleshooting rows. |

@@ -54,6 +54,13 @@ railops:
     proxy-secret: ${RAILOPS_EDGE_PROXY_SECRET:}
     # Exact origins allowed to call /api/** from a browser (the RailLens website). Empty = none.
     cors-allowed-origins: ${RAILOPS_EDGE_CORS_ALLOWED_ORIGINS:}
+    # Render's free plan puts idle services to sleep: wake them on gateway start, wait for a sleeping one before
+    # forwarding, keep them awake while in use (Waker). Off in compose / Kubernetes.
+    wake:
+      enabled: ${RAILOPS_EDGE_WAKE_ENABLED:false}
+      # More services to keep awake that the gateway doesn't route to (notification only consumes Kafka, so nothing
+      # else would ever wake it). Comma-separated base URLs.
+      extra: ${RAILOPS_EDGE_WAKE_EXTRA:}
   routes:
     identity: ${IDENTITY_URL:http://identity-service:8080}
     reservation: ${RESERVATION_URL:http://reservation-service:8080}

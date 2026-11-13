@@ -165,6 +165,11 @@ print_service() {
       kv RESERVATION_URL "$RESERVATION_URL"
       kv PAYMENT_URL "$PAYMENT_URL"
       kv JWK_SET_URI "${IDENTITY_URL}/.well-known/jwks.json"
+      # Free plan: services sleep after 15 idle minutes. The gateway wakes them all when it starts, waits for a sleeping
+      # one before forwarding (no "service had a problem"), and keeps them awake while it has traffic. Notification only
+      # reads Kafka, so nothing else would ever wake it. Set RAILOPS_WAKE=false in render.env for always-on plans.
+      kv RAILOPS_EDGE_WAKE_ENABLED "${RAILOPS_WAKE:-true}"
+      kv RAILOPS_EDGE_WAKE_EXTRA "${NOTIFICATION_URL:-https://railops-notification.onrender.com}"
       redis
       # Render's internal proxy. The real visitor IP is in True-Client-IP (set by Cloudflare in front of Render);
       # walking X-Forwarded-For would stop at a Cloudflare edge address and put everyone in one rate-limit bucket.

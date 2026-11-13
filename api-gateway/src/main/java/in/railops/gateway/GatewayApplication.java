@@ -4,6 +4,11 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.cloud.gateway.support.ServerWebExchangeUtils;
+import org.springframework.context.event.EventListener;
+import org.springframework.http.MediaType;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
@@ -24,6 +29,11 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -56,6 +66,12 @@ public class GatewayApplication {
                 // ---- identity: login and registration throttled per IP (brute force / enumeration)
                 .route("auth-credentials", r -> r.method(HttpMethod.POST).and().path("/api/v1/auth/login", "/api/v1/auth/app/login", "/api/v1/auth/register")
                         .filters(f -> f.requestRateLimiter(c -> c.setRateLimiter(credentialLimiter()).setKeyResolver(ipKey())))
+                        .uri(identity))
+                // Staff "move RailLens accounts": identity waits up to 120 s for RailLens (it may be asleep on a free
+                // plan), so this one route may take longer than the 10 s every other route gets.
+                .route("raillens-account-move", r -> r.method(HttpMethod.POST).and().path("/api/v1/admin/raillens/account-move")
+                        .filters(f -> f.requestRateLimiter(c -> c.setRateLimiter(defaultLimiter()).setKeyResolver(principalKey)))
+                        .metadata(org.springframework.cloud.gateway.support.RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR, 130_000)
                         .uri(identity))
                 .route("identity", r -> r.path("/api/v1/auth/**", "/api/v1/admin/**", "/.well-known/**")
                         .filters(f -> f.requestRateLimiter(c -> c.setRateLimiter(defaultLimiter()).setKeyResolver(principalKey)))
@@ -96,6 +112,68 @@ public class GatewayApplication {
     @Bean
     RedisRateLimiter searchLimiter() {
         return new RedisRateLimiter(10, 30, 1);
+    }
+
+    /** See {@link Waker}. On only where services sleep (Render's free plan): {@code RAILOPS_EDGE_WAKE_ENABLED=true}. */
+    @Bean
+    Waker waker(@Value("${railops.edge.wake.enabled:false}") boolean enabled,
+                @Value("${railops.edge.wake.extra:}") String extra,
+                @Value("${railops.routes.identity}") String identity,
+                @Value("${railops.routes.reservation}") String reservation,
+                @Value("${railops.routes.payment}") String payment) {
+        List<URI> targets = new ArrayList<>(List.of(URI.create(identity), URI.create(reservation), URI.create(payment)));
+        for (String e : extra.split(",")) {
+            if (!e.isBlank()) {
+                targets.add(URI.create(e.trim()));
+            }
+        }
+        return new Waker(enabled, targets, WebClient.create(), Clock.systemUTC(),
+                Duration.ofMinutes(5), Duration.ofMinutes(10), Duration.ofSeconds(75));
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    void wakeEverythingOnStart(ApplicationReadyEvent event) {
+        Waker w = event.getApplicationContext().getBean(Waker.class);
+        if (w.enabled()) {
+            w.nudgeAll(true);   // the gateway woke up: wake the services now, in parallel, before the first request needs them
+        }
+    }
+
+    /**
+     * Runs after the route is chosen and before the request is forwarded: waits for the target service if it may be
+     * asleep (see {@link Waker}), and keeps all services awake while requests keep coming. A response that came from
+     * the service itself (not the host's own HTML error page) marks it awake.
+     */
+    @Bean
+    @Order(10_001)   // after RouteToRequestUrlFilter (10000), before NettyRoutingFilter (forwarding)
+    GlobalFilter wakeBeforeForwarding(Waker waker) {
+        return (exchange, chain) -> {
+            if (!waker.enabled()) {
+                return chain.filter(exchange);
+            }
+            URI target = exchange.getAttribute(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR);
+            waker.nudgeAll();
+            return waker.awake(target)
+                    .then(chain.filter(exchange))
+                    .doOnSuccess(v -> {
+                        if (cameFromService(exchange.getResponse().getStatusCode() == null ? 0
+                                        : exchange.getResponse().getStatusCode().value(),
+                                exchange.getResponse().getHeaders().getContentType())) {
+                            waker.seen(target);
+                        }
+                    });
+        };
+    }
+
+    /** A 5xx HTML page is the host's own error (e.g. Render's "service unavailable"), not an answer from the service. */
+    static boolean cameFromService(int status, MediaType type) {
+        if (status == 0) {
+            return false;
+        }
+        if (status < 500) {
+            return true;
+        }
+        return type == null || !MediaType.TEXT_HTML.isCompatibleWith(type);
     }
 
     @Bean
