@@ -83,5 +83,5 @@ railops:
     key-secret: ${RAZORPAY_KEY_SECRET}
     webhook-secret: ${RAZORPAY_WEBHOOK_SECRET}
     # Where Razorpay sends the passenger after paying; {pnr} is filled in. The RailLens booking page.
-    callback-url: ${RAZORPAY_CALLBACK_URL:https://raillens.vercel.app/bookings/{pnr}}
+    callback-url: ${RAZORPAY_CALLBACK_URL:https://rail-lens-frontend.vercel.app/bookings/{pnr}}
 

@@ -142,7 +142,7 @@ print_service() {
         kv RAZORPAY_KEY_ID "$RAZORPAY_KEY_ID"
         kv RAZORPAY_KEY_SECRET "$RAZORPAY_KEY_SECRET"
         kv RAZORPAY_WEBHOOK_SECRET "$RAZORPAY_WEBHOOK_SECRET"
-        kv RAZORPAY_CALLBACK_URL "${RAILLENS_WEB_ORIGIN:-https://raillens.vercel.app}/bookings/{pnr}"
+        kv RAZORPAY_CALLBACK_URL "${RAILLENS_WEB_ORIGIN:-https://rail-lens-frontend.vercel.app}/bookings/{pnr}"
       else
         # SIMULATED payment gateway: fake money only.
         kv SPRING_PROFILES_ACTIVE sim

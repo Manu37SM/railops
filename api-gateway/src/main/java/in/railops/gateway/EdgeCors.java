@@ -14,7 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Lets the RailLens website (a different origin, e.g. https://raillens.vercel.app) call the RailOps API from the
+ * Lets the RailLens website (a different origin, e.g. https://rail-lens-frontend.vercel.app) call the RailOps API from the
  * browser (Phase 3B, needed by booking in Phase 4). The RailOps Angular app is same-origin and needs none of this.
  *
  * <p>Off unless {@code railops.edge.cors-allowed-origins} lists origins. Exact origins only: a wildcard is refused at
