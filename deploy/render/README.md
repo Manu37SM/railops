@@ -118,13 +118,17 @@ Use the same choice for every Render service and the Key Value instance.
 
 ## Step 6: Kafka on Confluent Cloud
 
-1. Sign up at **confluent.io/confluent-cloud** (a card may be required).
-2. **Add cluster → Basic**. Pick AWS and a region close to Step 4.
-   - At demo traffic the Basic cluster should cost little or nothing. You pay only for the data you move and store. Check the estimate Confluent shows you.
+1. Sign up at **confluent.io/confluent-cloud**. It may ask for a card; new accounts usually get free trial credit.
+2. Create the cluster. **The first screen offers a *Standard* cluster ($0.75/hour, about $550/month). Don't click Continue there.**
+   - Click **Explore other cluster types and pricing** → pick **Basic**. Basic has no base price: the first eCKU is free.
+   - Cloud **AWS**, region **Singapore (ap-southeast-1)**, or **Mumbai (ap-south-1)**. Name it `railops`. Single zone is fine.
+   - Before the final **Launch**, check the summary says **Basic**.
 3. Open the cluster:
-   - **Cluster settings**: copy the **Bootstrap server** (`pkc-xxxxx....confluent.cloud:9092`).
-   - **API Keys → Create key → Global access**: copy the **key** and the **secret**. The secret is shown once.
-4. You don't need to create topics: the services create the 12 they need on first start.
+   - **Cluster settings**: copy the **Bootstrap server** (`pkc-xxxxx....confluent.cloud:9092`) into `KAFKA_BOOTSTRAP`.
+   - **API Keys → Add key → My account** (global access): copy the **key** and **secret** into `KAFKA_API_KEY` and `KAFKA_API_SECRET`. The secret is shown once; put it in your password manager too.
+4. Don't create topics: the services create the 12 they need on first start.
+5. Keep `KAFKA_MAX_PARTITIONS=2` in `render.env`. Basic includes 30 partitions per eCKU. At 2 partitions each, the 12 topics use 24 and stay in the free eCKU. RailOps' full counts (120 partitions) would bill about $300/month in extra eCKUs. **Kafka can't shrink a topic later**, so this must be set before the services first start.
+6. Optional but wise: **Billing → set a budget alert** (for example $5).
 
 > Why not Aiven's free Kafka? Its free plan allows 5 topics, and RailOps uses 12: 5 event topics, plus 7 "dead-letter" topics where broken messages are parked for a human. Upstash Kafka no longer exists.
 
@@ -274,7 +278,7 @@ RailOps reads train timetables from **RailLens**. In `render.env`, `RAILLENS_API
 | Render static site | $0 | $0 |
 | Render Key Value / Redis Cloud | $0 (no persistence) | $0, or a paid plan if you need persistence and TLS |
 | Neon | $0 (Free: 1 GB per project; compute sleeps after 5 idle minutes) | likely paid Launch (usage-based). Always-on services keep the compute awake beyond the free hours |
-| Confluent Basic | ≈ $0 to a few dollars (pay per GB) | same |
+| Confluent Basic | ≈ $0 to a few dollars (first eCKU free; pay per GB moved/stored). Needs `KAFKA_MAX_PARTITIONS=2` | same |
 
 Prices change. Check each provider's pricing page before relying on these numbers.
 
@@ -295,6 +299,7 @@ Prices change. Check each provider's pricing page before relying on these number
 | `prepared statement ... does not exist` / lock errors | You used the **pooled** Neon string | Use the direct string (no `-pooler`) in `render.env`, regenerate, re-paste |
 | gateway/reservation: `NOAUTH` or `WRONGPASS` in logs | Redis Cloud password missing or wrong | Set `REDIS_PASSWORD` in `render.env`, regenerate, re-paste gateway and reservation |
 | identity: *JWT private key missing* | Secret file not added or misnamed | Step 11.2: filename must be exactly `railops.jwt.private-key-pem` |
+| Confluent bill shows extra eCKUs | Topics were created before `KAFKA_MAX_PARTITIONS` was set (120 partitions) | Delete the 12 topics in Confluent, check `RAILOPS_KAFKA_MAX_PARTITIONS=2` on identity, reservation, payment and notification, restart them |
 | Kafka: `SaslAuthenticationException` / *Failed to create topics* | Wrong API key, or the key lacks access | Make a new **Global** key in Confluent, update `render.env`, regenerate, re-paste |
 | Service restarts with *OutOfMemory* | 512 MB was too small for it | Switch that service to **Standard** (2 GB) |
 | Browser: login works but you're logged out on refresh | Rewrite rule missing, so the API isn't same-site | Step 9 rewrite `/api/*` must be first |

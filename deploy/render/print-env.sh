@@ -76,6 +76,9 @@ kafka() {
   kv KAFKA_BOOTSTRAP "$KAFKA_BOOTSTRAP"
   kv KAFKA_REPLICAS 3
   kv RAILOPS_KAFKA_REPLICAS 3
+  # Confluent Basic includes 30 partitions per eCKU (the first eCKU is free). 12 topics x 2 = 24 stays inside it;
+  # the full counts (120) would bill extra eCKUs. Set before the FIRST start: Kafka can't shrink a topic later.
+  kv RAILOPS_KAFKA_MAX_PARTITIONS "${KAFKA_MAX_PARTITIONS:-2}"
   if [ -n "${KAFKA_API_KEY:-}" ]; then
     # Confluent Cloud: SASL_SSL + PLAIN with the cluster API key. Spring Boot's spring.kafka.jaas.* builds
     # the JAAS config, so no quoting games with sasl.jaas.config in an environment variable.

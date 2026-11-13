@@ -235,6 +235,8 @@ Things to know first:
     - `RAILLENS_API_URL` is where RailLens' API is (already filled in with `https://raillens-train-db.onrender.com/api/v1`).
     - `RAILLENS_WEB_ORIGIN` is the RailLens website, which may call RailOps from the browser (needed for booking in RailLens later). `print-env.sh` turns both into the right service settings.
 - **Redis:** Render allows only **one free Key Value per workspace**, and yours is already used by `devtoolbox-redis` (Oregon). So RailOps uses **Redis Cloud's free database** instead (README Step 7, option B): put its host, port and password in `render.env` (`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`). That free database has no TLS. It only holds short-lived counters keyed by visitor IP or user ID; move to a TLS Redis before real users.
+- **Kafka (Confluent):** create a **Basic** cluster, not the Standard one the sign-up screen suggests ($0.75/hour). Keep `KAFKA_MAX_PARTITIONS=2` in `render.env`: RailOps' full topic sizes (120 partitions) would bill about $300/month in extra capacity on Basic; at 2 they fit in the free part. It must be set before the services first start.
+- **Neon:** the `railops` project (Singapore, PostgreSQL 17) exists and `neon-setup.sh` has been run on it (13 Nov 2026). Its host goes in `NEON_HOST`.
 - **Region:** the RailLens backend runs in Render **Oregon**, but RailOps goes in **Singapore** with its Neon and Redis, as the README says. RailOps only calls RailLens when staff open trains, so the distance doesn't slow bookings.
 - **The `railops` folder has no git history yet.** Before you start merging RailOps changes, make it a repo: `cd railops`, `git init`, `git add .`, `git commit -m "RailOps baseline"`. Check first that `deploy/render/render.env`, `deploy/render/out/` and `deploy/secrets/` are listed in `.gitignore` (they are), so secrets never get committed.
 
@@ -401,6 +403,7 @@ Only when **all** of these are true: the Phase 2A website is live, every admin h
 | 13 Nov 2026 | Phase 4A in the tracker; new section 9b announcing the single-login plan and its one breaking step (4D). |
 | 13 Nov 2026 | Phase 4B: new branch and merge order, migration V8, two optional backend settings (leave unset until RailOps is live). |
 | 13 Nov 2026 | Phase 4C: account move (tracker, merge order, the three-step order in 9b). |
+| 13 Nov 2026 | RailOps: Kafka partition cap for Confluent Basic (`KAFKA_MAX_PARTITIONS`), Basic-not-Standard warning, Neon project set up. |
 | 13 Nov 2026 | RailOps first deploy: Redis Cloud free instead of Render Key Value (the workspace's one free Key Value is taken), region note, `REDIS_PASSWORD`/`REDIS_USERNAME`/`REDIS_SSL` in `render.env`. |
 | 13 Nov 2026 | Phase 6: Razorpay test mode (new Section 9d), seats and coach sets, audit log and progressive lockout (backend setting), CSP and audit smoke checks, four troubleshooting rows. |
 | 13 Nov 2026 | Phase 5B: booking in the Android app (tracker, merge order, app steps in 9c, Section 8 check). |
