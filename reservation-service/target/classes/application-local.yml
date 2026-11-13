@@ -1,0 +1,32 @@
+# Local development only. These keys are throwaway test values and must never be used anywhere else.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/railops
+    username: railops
+    password: railops
+
+railops:
+  prediction:
+    wl:
+      enabled: true     # synthetic model: fine for local/sim, never for real passengers
+  kafka:
+    replicas: 1
+  payment:
+    base-url: http://localhost:8083
+  security:
+    jwk-set-uri: http://localhost:8082/.well-known/jwks.json
+    token-uri: http://localhost:8082/oauth2/token
+    client-secret: local-only-reservation-client-secret
+  crypto:
+    contact-enc-key: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+    contact-hmac-key: HxwdGhkYFxYVFBMSERAPDg0MCwoJCAcGBQQDAgEAAQI=
+
+logging:
+  level:
+    org.apache.kafka: WARN
+    in.railops: DEBUG
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

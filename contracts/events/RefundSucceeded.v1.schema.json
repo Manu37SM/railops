@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/RefundSucceeded.v1.schema.json",
+  "title": "RefundSucceeded",
+  "description": "MONEY. Consumers: notification.",
+  "type": "object",
+  "properties": {
+    "refundId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "pnr": {
+      "type": "string",
+      "pattern": "^[0-9]{10}$"
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    }
+  },
+  "required": [
+    "refundId",
+    "paymentId",
+    "pnr",
+    "amount"
+  ],
+  "additionalProperties": false
+}

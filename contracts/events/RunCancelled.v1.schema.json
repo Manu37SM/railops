@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/RunCancelled.v1.schema.json",
+  "title": "RunCancelled",
+  "description": "ops.disruption.v1. Consumers: reservation (bulk cancellation job).",
+  "type": "object",
+  "properties": {
+    "trainRunId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requestedBy": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "trainRunId",
+    "reason",
+    "requestedBy"
+  ],
+  "additionalProperties": false
+}

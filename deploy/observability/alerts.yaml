@@ -1,0 +1,96 @@
+# Prometheus alert rules (Google Managed Prometheus: kubectl apply as a Rules resource; plain Prometheus: rule_files).
+# Each alert names its runbook. Thresholds from the Phase 13 drills (docs/incidents).
+groups:
+  - name: railops-events
+    rules:
+      - alert: RailopsOutboxStuck
+        expr: max by (schema) (outbox_oldest_age_seconds) > 60
+        for: 1m
+        labels: {severity: page}
+        annotations:
+          summary: "{{ $labels.schema }} outbox: oldest unpublished event is {{ $value }}s old"
+          runbook: docs/runbooks/kafka-outage.md
+      - alert: RailopsOutboxSlow
+        expr: max by (schema) (outbox_oldest_age_seconds) > 15
+        for: 5m
+        labels: {severity: ticket}
+        annotations: {runbook: docs/runbooks/kafka-outage.md}
+      - alert: RailopsDeadLettered
+        expr: increase(kafka_dead_lettered_total[5m]) > 0
+        labels: {severity: page}
+        annotations:
+          summary: "{{ $labels.consumer }} dead-lettered events from {{ $labels.topic }}"
+          runbook: docs/runbooks/dead-letter-replay.md
+  - name: railops-jobs
+    rules:
+      - alert: RailopsScheduledJobFailing
+        expr: rate(scheduled_task_failures_total[5m]) > 0
+        for: 2m
+        labels: {severity: page}
+        annotations:
+          summary: "a @Scheduled job is throwing (INC-001b: hold expiry silently stopped)"
+      - alert: RailopsHoldStatusChecksFailing
+        expr: rate(booking_hold_status_check_failed_total[5m]) > 0
+        for: 5m
+        labels: {severity: ticket}
+        annotations:
+          summary: "hold expiry can't reach payment-service; paid holds are being kept (max 15 min)"
+          runbook: docs/runbooks/kafka-outage.md
+      - alert: RailopsPartitionRunwayLow
+        expr: min(reservation_partitions_runway_days) < 75
+        labels: {severity: ticket}
+        annotations: {summary: "allocation partitions end in {{ $value }} days (bookings fail past it)"}
+  - name: railops-database
+    rules:
+      - alert: RailopsBookingBusy
+        expr: |
+          sum(rate(http_server_requests_seconds_count{uri="/api/v1/bookings",method="POST",status="503"}[2m]))
+            / sum(rate(http_server_requests_seconds_count{uri="/api/v1/bookings",method="POST"}[2m])) > 0.05
+        for: 2m
+        labels: {severity: page}
+        annotations: {runbook: docs/runbooks/db-lock-contention.md}
+      - alert: RailopsIdleTransactionHoldingLocks
+        # postgres-exporter custom query (see runbook query 2), exported as pg_idle_tx_holding_locks_max_seconds
+        expr: pg_idle_tx_holding_locks_max_seconds > 30
+        labels: {severity: page}
+        annotations: {runbook: docs/runbooks/db-lock-contention.md}
+  - name: railops-security
+    rules:
+      - alert: RailopsLoginFailuresSpike
+        # usable since Phase 12 fixed the dropped failure series
+        expr: sum(rate(identity_login_total{result="failure"}[5m])) > 5 * sum(rate(identity_login_total{result="failure"}[1h] offset 1d))
+        for: 10m
+        labels: {severity: ticket}
+  - name: railops-notification
+    rules:
+      - alert: RailopsSmsLostAfterClaim
+        # At-most-once delivery: a crash between claim and provider call loses that SMS. Rare; any is worth a look.
+        expr: notification_stuck_sending > 0
+        for: 10m
+        labels: {severity: ticket}
+        annotations: {summary: "{{ $value }} SMS claimed but never sent (notification.delivery status SENDING)"}
+      - alert: RailopsSmsProviderFailing
+        expr: sum(rate(notification_processed_total{status="FAILED"}[10m])) > 0.05
+        for: 10m
+        labels: {severity: page}
+        annotations: {summary: "SMS provider calls failing; failures are recorded, not retried"}
+  - name: railops-ml
+    rules:
+      - alert: RailopsWlModelWorseThanBaseRate
+        # Brier skill vs always predicting the observed rate. <0 = the estimate passengers see is worse than a
+        # constant. Needs volume before it means anything.
+        expr: prediction_wl_brier_skill < 0 and prediction_wl_resolved_count >= 500
+        for: 6h
+        labels: {severity: ticket}
+        annotations: {runbook: docs/ml/model-card.md#monitoring-and-rollback, summary: "WL model {{ $labels.model }} has negative skill"}
+      - alert: RailopsWlModelMiscalibrated
+        # Systematic over-confidence is the harmful direction: passengers keep WL tickets that will not confirm.
+        expr: prediction_wl_calibration_gap > 0.08 and prediction_wl_resolved_count >= 500
+        for: 6h
+        labels: {severity: ticket}
+        annotations: {runbook: docs/ml/model-card.md#monitoring-and-rollback}
+      - alert: RailopsWlPredictionErrors
+        expr: sum(rate(prediction_wl_errors_total[15m])) > 0.1
+        for: 15m
+        labels: {severity: ticket}
+        annotations: {summary: "WL predictions failing (passengers silently see no estimate)"}

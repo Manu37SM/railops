@@ -1,0 +1,14 @@
+{
+  "description": "notification-service fetches the contact for a PNR just before sending. PII: plaintext phone/email cross the internal network; protected by scope contacts:read, and by mTLS from Phase 12.",
+  "consumer": "notification-service",
+  "provider": "reservation-service",
+  "request": {
+    "method": "GET",
+    "path": "/internal/v1/bookings/2400000018/contact",
+    "headers": { "Authorization": "Bearer <service token, scope contacts:read>" }
+  },
+  "response": {
+    "status": 200,
+    "body": { "pnr": "2400000018", "phone": "9820012345", "email": "sana@example.com" }
+  }
+}

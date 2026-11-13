@@ -1,0 +1,5 @@
+deploy/secrets/
+deploy/render/render.env
+deploy/render/out/
+# Redis snapshot left behind by a local redis-server
+dump.rdb

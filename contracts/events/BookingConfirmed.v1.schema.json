@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/BookingConfirmed.v1.schema.json",
+  "title": "BookingConfirmed",
+  "description": "Payment captured and berths secured. Consumers: notification.",
+  "type": "object",
+  "properties": {
+    "pnr": {
+      "type": "string",
+      "pattern": "^[0-9]{10}$"
+    },
+    "trainRunId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reallocated": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "pnr",
+    "trainRunId",
+    "paymentId",
+    "reallocated"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,167 @@
+spring:
+  application:
+    name: reservation-service
+  config:
+    # Secrets as files (docker/k8s secrets mounted at /run/secrets/<property.name>): unlike env vars they don't
+    # show up in `docker inspect`, /proc/<pid>/environ or crash reports. Missing directory = no-op (local dev).
+    # /run/secrets: docker/k8s secret mounts. /etc/secrets: Render "Secret Files" (deploy/render/README.md).
+    import: "optional:configtree:/run/secrets/,optional:configtree:/etc/secrets/"
+  profiles:
+    group:
+      local: sim     # local dev = simulated PSP / fare table; compose & staging activate "sim" alone
+  threads:
+    virtual:
+      enabled: true          # see Phase 4 §11: verify no JDBC pinning under load (-Djdk.tracePinnedThreads=short)
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/railops}
+    username: ${DB_USER:reservation_app}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:40}
+      minimum-idle: 10
+      connection-timeout: 2000      # fail fast under overload instead of queueing requests for 30s
+      # Every connection: cap lock waits so a migration or long txn can't freeze checkout.
+      connection-init-sql: "SET lock_timeout = '3s'; SET statement_timeout = '10s'; SET idle_in_transaction_session_timeout = '30s'"
+  flyway:
+    schemas: reservation
+    # Migrations run as the schema OWNER; the app connects as a DML-only role (Phase 12). Locally both are the
+    # same user. ${appRole} in migrations receives the runtime grants.
+    user: ${DB_MIGRATION_USER:${spring.datasource.username}}
+    password: ${DB_MIGRATION_PASSWORD:${spring.datasource.password}}
+    placeholders:
+      appRole: ${spring.datasource.username}
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 200ms          # a slow Redis must degrade to the DB fallback quickly, not hold request threads
+      connect-timeout: 500ms
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        linger.ms: 5
+        compression.type: lz4
+        # Kafka requires delivery.timeout.ms >= linger.ms + request.timeout.ms. The Phase 5 value (30000 with the
+        # default 30000 request timeout) made the producer refuse to construct; with no broker locally that
+        # surfaced as "Kafka unavailable" until Phase 9. Both values are now explicit.
+        request.timeout.ms: 15000
+        delivery.timeout.ms: 60000
+        max.block.ms: 2000          # send() must not stall callers for 60s when brokers are unreachable
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        isolation.level: read_committed
+        max.poll.records: 100
+    listener:
+      ack-mode: record
+  task:
+    scheduling:
+      pool:
+        size: 4
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false   # tolerant reader for events and stored responses
+
+server:
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  endpoint:
+    health:
+      probes:
+        enabled: true          # /actuator/health/liveness and /readiness, also outside Kubernetes (compose)
+      group:
+        readiness:
+          include: readinessState,db
+
+railops:
+  raillens:
+    # RailLens public API, where staff import train timetables from (Phase 3B). Not on the booking path.
+    base-url: ${RAILOPS_RAILLENS_BASE_URL:http://localhost:8080/api/v1}
+  prediction:
+    wl:
+      # OFF by default: the bundled model is trained on synthetic data (docs/ml/model-card.md). Turning it on in
+      # production requires a model trained and evaluated on real chart outcomes.
+      enabled: false
+      model-location: classpath:ml/wl-model.json
+      monitor-interval: PT10M
+      disclaimer: "Estimate only, based on past booking patterns. It is not a guarantee of confirmation and does not affect your waitlist position."
+  booking:
+    hold-minutes: 10
+    sweep-ms: 1000
+  outbox:
+    batch-size: 500
+    poll-ms: 100
+  jobs:
+    max-connections: 5
+  catalog:
+    base-url: ${CATALOG_URL:http://catalog-service:8080}
+  payment:
+    base-url: ${PAYMENT_URL:http://payment-service:8080}
+  payments:
+    # Phase 5: lets the booking owner finish payment-service's SIMULATED checkout (no money). True only where
+    # payment-service runs the "sim" profile (Render demo, compose). Never with a real gateway.
+    simulated: ${RAILOPS_PAYMENTS_SIMULATED:false}
+  chart:
+    poll-ms: 30000
+  security:
+    token-uri: ${TOKEN_URI:http://identity-service:8080/oauth2/token}
+    client-id: ${SERVICE_CLIENT_ID:reservation}
+    client-secret: ${SERVICE_CLIENT_SECRET:}
+    issuer: ${JWT_ISSUER:https://identity.railops.local}
+    jwk-set-uri: ${JWK_SET_URI:http://identity-service:8080/.well-known/jwks.json}
+  crypto:
+    contact-enc-key: ${CONTACT_ENC_KEY:}     # base64 256-bit; from the secret store, never committed
+    contact-hmac-key: ${CONTACT_HMAC_KEY:}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      redis:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 5s
+        permitted-number-of-calls-in-half-open-state: 3
+      catalog:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+      payment:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 15s
+        ignore-exceptions: in.railops.reservation.domain.error.DomainException
+  retry:
+    instances:
+      catalog:
+        max-attempts: 2
+        wait-duration: 50ms
+      payment:
+        max-attempts: 2           # safe for POST only because of the Idempotency-Key
+        wait-duration: 200ms
+        ignore-exceptions: in.railops.reservation.domain.error.DomainException
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:false}
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:false}

@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    username: railops
+    password: railops
+server:
+  port: 8084
+railops:
+  kafka:
+    replicas: 1
+  reservation:
+    base-url: http://localhost:8081
+  security:
+    token-uri: http://localhost:8082/oauth2/token
+    client-secret: local-only-notification-client-secret
+logging:
+  level:
+    org.apache.kafka: WARN

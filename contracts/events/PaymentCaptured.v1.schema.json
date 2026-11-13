@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/PaymentCaptured.v1.schema.json",
+  "title": "PaymentCaptured",
+  "description": "MONEY. Gateway confirmed capture. Consumers: reservation (confirm booking).",
+  "type": "object",
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "pnr": {
+      "type": "string",
+      "pattern": "^[0-9]{10}$"
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "const": "INR"
+    }
+  },
+  "required": [
+    "paymentId",
+    "pnr",
+    "amount",
+    "currency"
+  ],
+  "additionalProperties": false
+}

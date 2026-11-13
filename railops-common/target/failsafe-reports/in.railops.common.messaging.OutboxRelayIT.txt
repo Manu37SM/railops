@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: in.railops.common.messaging.OutboxRelayIT
+-------------------------------------------------------------------------------
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 11.57 s -- in in.railops.common.messaging.OutboxRelayIT

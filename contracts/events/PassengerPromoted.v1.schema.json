@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/PassengerPromoted.v1.schema.json",
+  "title": "PassengerPromoted",
+  "description": "WL->RAC or RAC->CNF. Consumers: notification.",
+  "type": "object",
+  "properties": {
+    "pnr": {
+      "type": "string",
+      "pattern": "^[0-9]{10}$"
+    },
+    "passengerId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "newStatus": {
+      "type": "string",
+      "enum": [
+        "CNF",
+        "RAC"
+      ]
+    },
+    "statusText": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "pnr",
+    "passengerId",
+    "newStatus",
+    "statusText"
+  ],
+  "additionalProperties": false
+}

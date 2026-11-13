@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/RefundNeedsReview.v1.schema.json",
+  "title": "RefundNeedsReview",
+  "description": "MONEY. Refund exhausted retries; a human must decide. Consumers: ops alerting.",
+  "type": "object",
+  "properties": {
+    "refundId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    }
+  },
+  "required": [
+    "refundId",
+    "paymentId",
+    "amount"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,12 @@
+server:
+  port: 8080
+management:
+  server:
+    port: 8090
+railops:
+  routes:
+    identity: http://localhost:8082
+    reservation: http://localhost:8081
+    payment: http://localhost:8083
+  security:
+    jwk-set-uri: http://localhost:8082/.well-known/jwks.json

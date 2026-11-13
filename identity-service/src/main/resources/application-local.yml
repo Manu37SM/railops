@@ -1,0 +1,30 @@
+# Local development only. Throwaway keys; ephemeral JWT signing key (generated at startup).
+spring:
+  datasource:
+    username: railops
+    password: railops
+server:
+  port: 8082
+railops:
+  kafka:
+    replicas: 1
+  crypto:
+    enc-key: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+    hmac-key: HxwdGhkYFxYVFBMSERAPDg0MCwoJCAcGBQQDAgEAAQI=
+  web:
+    allowed-origins: http://localhost:4200
+    secure-cookie: false
+  audit:
+    consume: true
+  service-clients: reservation|local-only-reservation-client-secret|payments:create payments:read bookings:read;notification|local-only-notification-client-secret|contacts:read
+  bootstrap:
+    admin-email: root.admin@railops.local
+    admin-password: Local-Only-Bootstrap-Passw0rd
+logging:
+  level:
+    org.apache.kafka: WARN
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

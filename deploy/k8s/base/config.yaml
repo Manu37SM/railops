@@ -1,0 +1,63 @@
+# Non-secret configuration. Endpoints of managed services are environment-specific: overlays patch them.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: railops-platform
+data:
+  TZ: UTC
+  CLOUDSQL_INSTANCE: PROJECT_ID:REGION:railops-pg       # Cloud SQL (PostgreSQL 16), private IP
+  DB_URL: jdbc:postgresql://127.0.0.1:5432/railops      # via the cloud-sql-proxy sidecar
+  SPRING_FLYWAY_ENABLED: "false"                        # the migrate init container owns migrations
+  KAFKA_BOOTSTRAP: KAFKA_BOOTSTRAP_SERVERS              # Managed Service for Apache Kafka
+  RAILOPS_KAFKA_REPLICAS: "3"
+  REDIS_HOST: REDIS_PRIVATE_IP                          # Memorystore for Redis (AUTH + in-transit TLS)
+  JWT_ISSUER: https://identity.railops.example.in
+  JWK_SET_URI: http://identity-service:8080/.well-known/jwks.json
+  TOKEN_URI: http://identity-service:8080/oauth2/token
+  SPRINGDOC_ENABLED: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: identity-service}
+data:
+  DB_USER: identity_app
+  DB_POOL_SIZE: "10"
+  # MUST equal the public web origin exactly, or every browser POST is rejected by CORS (403). Phase 12 finding.
+  ALLOWED_ORIGINS: https://railops.example.in
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: reservation-service}
+data:
+  DB_USER: reservation_app
+  DB_POOL_SIZE: "20"
+  PAYMENT_URL: http://payment-service:8080
+  CATALOG_URL: http://catalog-service:8080   # not built yet: reservation can't price fares outside the sim profile
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: payment-service}
+data:
+  DB_USER: payment_app
+  DB_POOL_SIZE: "10"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: notification-service}
+data:
+  DB_USER: notification_app
+  DB_POOL_SIZE: "5"
+  RESERVATION_URL: http://reservation-service:8080
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: api-gateway}
+data:
+  IDENTITY_URL: http://identity-service:8080
+  RESERVATION_URL: http://reservation-service:8080
+  PAYMENT_URL: http://payment-service:8080
+  MANAGEMENT_PORT: "8090"
+  # Google Front End ranges: with container-native load balancing the LB connects straight to the web/gateway
+  # pods, so these are the only peers allowed to assert a client IP. Plus the web tier (pod CIDR, per cluster).
+  # Google's ALB sends "X-Forwarded-For: <client-supplied...>, <client>, <LB frontend IP>": trust the LB IP too.
+  RAILOPS_EDGE_TRUSTED_PROXIES: 35.191.0.0/16,130.211.0.0/22,POD_CIDR,LB_FRONTEND_IP/32

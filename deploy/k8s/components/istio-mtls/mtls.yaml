@@ -1,0 +1,42 @@
+# Service-to-service mTLS (deferred from Phase 6) via Istio / Cloud Service Mesh. Two layers above NetworkPolicy:
+#  1. STRICT: every pod-to-pod connection is mutually authenticated and encrypted; plaintext is refused.
+#  2. AuthorizationPolicy: /internal/** endpoints accept only the WORKLOAD that is meant to call them, by its
+#     SPIFFE identity, independent of (and in addition to) the OAuth scope the service checks itself. A stolen
+#     service token is useless from any other pod.
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata: {name: default}
+spec:
+  mtls: {mode: STRICT}
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata: {name: reservation-internal}
+spec:
+  selector: {matchLabels: {app.kubernetes.io/name: reservation-service}}
+  action: DENY
+  rules:
+    - to: [{operation: {paths: ["/internal/*"]}}]
+      from: [{source: {notPrincipals: ["cluster.local/ns/railops/sa/notification-service"]}}]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata: {name: payment-internal}
+spec:
+  selector: {matchLabels: {app.kubernetes.io/name: payment-service}}
+  action: DENY
+  rules:
+    - to: [{operation: {paths: ["/internal/*"]}}]
+      from: [{source: {notPrincipals: ["cluster.local/ns/railops/sa/reservation-service"]}}]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata: {name: identity-token-endpoint}
+spec:
+  selector: {matchLabels: {app.kubernetes.io/name: identity-service}}
+  action: DENY
+  rules:
+    # client_credentials only from the services that have a service client; never via the edge.
+    - to: [{operation: {paths: ["/oauth2/token"]}}]
+      from: [{source: {notPrincipals: ["cluster.local/ns/railops/sa/reservation-service",
+                                        "cluster.local/ns/railops/sa/notification-service"]}}]

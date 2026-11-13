@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: in.railops.payment.gateway.RazorpayGatewayTest
+-------------------------------------------------------------------------------
+Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.509 s -- in in.railops.payment.gateway.RazorpayGatewayTest

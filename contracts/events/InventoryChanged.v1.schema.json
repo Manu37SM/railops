@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/InventoryChanged.v1.schema.json",
+  "title": "InventoryChanged",
+  "description": "Drives the availability read model and WL promotion. RUN_STATUS is run-wide: class/quota are null. Producers use non_null inclusion, so for RUN_STATUS the keys are ABSENT (consumers read absent as null).",
+  "type": "object",
+  "properties": {
+    "trainRunId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "classCode": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "quotaCode": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fromSeq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "toSeq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "BOOKED",
+        "HOLD_EXPIRED",
+        "CANCELLED",
+        "PROMOTION",
+        "RUN_STATUS"
+      ]
+    }
+  },
+  "required": [
+    "trainRunId",
+    "fromSeq",
+    "toSeq",
+    "reason"
+  ],
+  "additionalProperties": false,
+  "if": {
+    "properties": {
+      "reason": {
+        "const": "RUN_STATUS"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "classCode": {
+        "type": "null"
+      },
+      "quotaCode": {
+        "type": "null"
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "classCode": {
+        "type": "string",
+        "pattern": "^(1A|2A|3A|3E|SL|CC|EC|2S)$"
+      },
+      "quotaCode": {
+        "type": "string",
+        "pattern": "^[A-Z]{2}$"
+      }
+    },
+    "required": [
+      "classCode",
+      "quotaCode"
+    ]
+  }
+}

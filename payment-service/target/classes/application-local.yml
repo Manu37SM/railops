@@ -1,0 +1,22 @@
+# Local only. Throwaway webhook secret; simulated gateway.
+spring:
+  datasource:
+    username: railops
+    password: railops
+server:
+  port: 8083
+railops:
+  kafka:
+    replicas: 1
+  security:
+    jwk-set-uri: http://localhost:8082/.well-known/jwks.json
+  gateway:
+    webhook-secret: local-only-webhook-secret-0123456789abcdef
+  sim-gateway:
+    webhook-url: http://localhost:8083/webhooks/simgw
+  reconcile:
+    stale-after: PT20S       # short, so the "webhook never arrives" scenario is testable
+    poll-ms: 5000
+logging:
+  level:
+    org.apache.kafka: WARN

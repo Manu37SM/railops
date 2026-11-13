@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: notification-service
+  config:
+    # Secrets as files (docker/k8s secrets mounted at /run/secrets/<property.name>): unlike env vars they don't
+    # show up in `docker inspect`, /proc/<pid>/environ or crash reports. Missing directory = no-op (local dev).
+    # /run/secrets: docker/k8s secret mounts. /etc/secrets: Render "Secret Files" (deploy/render/README.md).
+    import: "optional:configtree:/run/secrets/,optional:configtree:/etc/secrets/"
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/railops}
+    username: ${DB_USER:notification_app}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      connection-timeout: 2000
+      connection-init-sql: "SET lock_timeout = '3s'; SET statement_timeout = '10s'"
+  flyway:
+    schemas: notification
+    # Migrations run as the schema OWNER; the app connects as a DML-only role (Phase 12). Locally both are the
+    # same user. ${appRole} in migrations receives the runtime grants.
+    user: ${DB_MIGRATION_USER:${spring.datasource.username}}
+    password: ${DB_MIGRATION_PASSWORD:${spring.datasource.password}}
+    placeholders:
+      appRole: ${spring.datasource.username}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      acks: all
+      properties:
+        max.block.ms: 2000
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        isolation.level: read_committed
+    listener:
+      ack-mode: record
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true          # /actuator/health/liveness and /readiness, also outside Kubernetes (compose)
+      group:
+        readiness:
+          include: readinessState,db
+railops:
+  kafka:
+    replicas: ${KAFKA_REPLICAS:3}
+  reservation:
+    base-url: ${RESERVATION_URL:http://reservation-service:8080}
+  security:
+    token-uri: ${TOKEN_URI:http://identity-service:8080/oauth2/token}
+    client-id: ${SERVICE_CLIENT_ID:notification}
+    client-secret: ${SERVICE_CLIENT_SECRET:}

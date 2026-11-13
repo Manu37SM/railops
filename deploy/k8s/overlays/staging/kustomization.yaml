@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [../../base]
+components: [../../components/istio-mtls]
+images:   # CI writes immutable digests here (kustomize edit set image ...@sha256:...)
+  - {name: europe-docker.pkg.dev/railops-prod/railops/identity-service, newName: europe-docker.pkg.dev/railops-staging/railops/identity-service, newTag: staging}
+  - {name: europe-docker.pkg.dev/railops-prod/railops/reservation-service, newName: europe-docker.pkg.dev/railops-staging/railops/reservation-service, newTag: staging}
+  - {name: europe-docker.pkg.dev/railops-prod/railops/payment-service, newName: europe-docker.pkg.dev/railops-staging/railops/payment-service, newTag: staging}
+  - {name: europe-docker.pkg.dev/railops-prod/railops/notification-service, newName: europe-docker.pkg.dev/railops-staging/railops/notification-service, newTag: staging}
+  - {name: europe-docker.pkg.dev/railops-prod/railops/api-gateway, newName: europe-docker.pkg.dev/railops-staging/railops/api-gateway, newTag: staging}
+  - {name: europe-docker.pkg.dev/railops-prod/railops/web, newName: europe-docker.pkg.dev/railops-staging/railops/web, newTag: staging}
+patches:
+  - target: {kind: ConfigMap, name: railops-platform}
+    patch: |-
+      - {op: replace, path: /data/CLOUDSQL_INSTANCE, value: "railops-staging:asia-south1:railops-pg"}
+      - {op: replace, path: /data/KAFKA_BOOTSTRAP, value: "bootstrap.railops-staging.asia-south1.managedkafka.railops-staging.cloud.goog:9092"}
+      - {op: replace, path: /data/REDIS_HOST, value: "10.20.1.4"}
+      - {op: replace, path: /data/JWT_ISSUER, value: "https://identity.staging.railops.example.in"}
+  - target: {kind: ConfigMap, name: identity-service}
+    patch: |-
+      - {op: replace, path: /data/ALLOWED_ORIGINS, value: "https://staging.railops.example.in"}
+  - target: {kind: ConfigMap, name: api-gateway}
+    patch: |-
+      - {op: replace, path: /data/RAILOPS_EDGE_TRUSTED_PROXIES, value: "35.191.0.0/16,130.211.0.0/22,10.52.0.0/14,LB_FRONTEND_IP/32"}   # GFE ranges, pod CIDR, and the LB VIP Google appends to X-Forwarded-For
+  # Staging runs the simulated PSP and fare table (no real PSP sandbox or catalog-service yet).
+  - target: {kind: Deployment, name: "(reservation|payment)-service"}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: {name: SPRING_PROFILES_ACTIVE, value: sim}
+  - target: {kind: Deployment, name: payment-service}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: {name: RAILOPS_SIMGATEWAY_WEBHOOKURL, value: "http://payment-service:8080/webhooks/simgw"}
+  - target: {kind: HTTPRoute, name: web}
+    patch: |-
+      - {op: replace, path: /spec/hostnames/0, value: staging.railops.example.in}
+  - target: {kind: HTTPRoute, name: api}
+    patch: |-
+      - {op: replace, path: /spec/hostnames/0, value: api.staging.railops.example.in}
+  - target: {kind: HorizontalPodAutoscaler, name: reservation-service}
+    patch: |-
+      - {op: replace, path: /spec/minReplicas, value: 2}
+      - {op: replace, path: /spec/maxReplicas, value: 4}
+  - target: {kind: ClusterSecretStore, name: gcp-secret-manager}
+    patch: |-
+      - {op: replace, path: /spec/provider/gcpsm/projectID, value: railops-staging}
+      - {op: replace, path: /spec/provider/gcpsm/auth/workloadIdentity/clusterLocation, value: asia-south1}

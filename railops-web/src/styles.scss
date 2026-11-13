@@ -1,0 +1,195 @@
+// Global styles only (no component library): keeps the initial bundle small for staff on slow networks.
+// Look and feel follow RailLens (Phase 3A): same colour tokens, Geist font, light/dark/system theme saved under
+// "raillens-theme", rounded cards with a subtle shadow. Text colours meet WCAG AA (4.5:1) in both themes. One
+// deliberate difference: filled buttons stay blue-600 in dark mode, because white on RailLens' blue-500 is 3.7:1.
+:root {
+  --background: #f8fafc;   // slate-50
+  --foreground: #0f172a;   // slate-900
+  --card: #ffffff;
+  --border: #e2e8f0;       // slate-200
+  --muted: #64748b;        // slate-500 (4.55:1 on slate-50)
+  --primary: #2563eb;      // blue-600: links, active nav, focus ring
+  --primary-fill: #2563eb; // filled buttons (white text 5.2:1)
+  --primary-fill-hover: #1d4ed8;
+  --primary-soft: #eff6ff; // blue-50
+  --success: #15803d;      // green-700 (text on soft bg)
+  --success-bg: #dcfce7;
+  --warning: #a16207;      // yellow-700
+  --warning-bg: #fef9c3;
+  --danger: #b91c1c;       // red-700
+  --danger-bg: #fee2e2;
+  --danger-fill: #dc2626;
+  --topbar: rgba(255, 255, 255, 0.85);
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+  --radius: 8px;
+  color-scheme: light;
+
+  // Older names used before 3A, kept so nothing outside this file breaks.
+  --ink: var(--foreground);
+  --line: var(--border);
+  --bg: var(--background);
+  --brand: var(--primary);
+  --ok: var(--success);
+  --ok-bg: var(--success-bg);
+  --warn: var(--warning);
+  --warn-bg: var(--warning-bg);
+
+  font-family: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+  color: var(--foreground);
+  background: var(--background);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+:root.dark {
+  --background: #0b1220;
+  --foreground: #e2e8f0;   // slate-200
+  --card: #0f172a;         // slate-900
+  --border: #1e293b;       // slate-800
+  --muted: #94a3b8;        // slate-400 (7.0:1 on slate-900)
+  --primary: #3b82f6;      // blue-500, as RailLens (4.85:1 as text on slate-900)
+  --primary-fill: #2563eb; // white text on blue-500 would be 3.7:1, so buttons stay blue-600
+  --primary-fill-hover: #1d4ed8;
+  --primary-soft: rgb(59 130 246 / 0.15);
+  --success: #4ade80;
+  --success-bg: rgb(34 197 94 / 0.15);
+  --warning: #fbbf24;
+  --warning-bg: rgb(251 191 36 / 0.15);
+  --danger: #f87171;
+  --danger-bg: rgb(239 68 68 / 0.15);
+  --danger-fill: #b91c1c;
+  --topbar: rgba(15, 23, 42, 0.85);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; border-color: var(--border); }
+body { margin: 0; background: var(--background); color: var(--foreground); }
+h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 0.75rem; }
+h2 { font-size: 1.2rem; font-weight: 600; margin: 0 0 0.5rem; }
+h3 { font-size: 1rem; font-weight: 600; margin: 0.5rem 0; }
+a { color: var(--primary); }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.skip-link { position: absolute; left: -999px; }
+.skip-link:focus {
+  left: 1rem; top: 1rem; z-index: 100; padding: 0.5rem 1rem; border-radius: 6px;
+  background: var(--primary-fill); color: #fff;
+}
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+// Header: white/slate glass bar with a bottom border, like RailLens' Navbar.
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 1.5rem; padding: 0 1.5rem; min-height: 3.5rem;
+  background: var(--topbar); border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  color: var(--foreground);
+  button { margin: 0; }  // the global button margin would push "Log out" below the nav baseline
+  .brand {
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: var(--foreground);
+    font-weight: 700; font-size: 1rem; letter-spacing: -0.01em;
+  }
+  .brand-mark {
+    display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem;
+    border-radius: 0.75rem; background: var(--primary-fill); color: #fff;
+  }
+  .brand small { display: block; font-weight: 500; font-size: 0.7rem; color: var(--muted); letter-spacing: 0; }
+  nav { display: flex; gap: 1.25rem; flex: 1; flex-wrap: wrap; }
+  nav a { text-decoration: none; color: var(--muted); font-size: 0.9rem; font-weight: 500; padding: 0.25rem 0; }
+  nav a:hover { color: var(--primary); }
+  nav a.active { color: var(--primary); box-shadow: inset 0 -2px 0 var(--primary); }
+  .session { display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; }
+  .session a, .session .link { color: var(--muted); font-weight: 500; }
+}
+@media (max-width: 640px) {
+  .topbar { flex-wrap: wrap; gap: 0.5rem 1rem; padding: 0.5rem 1rem; .brand small { display: none; } }
+}
+
+.theme-toggle {
+  min-height: 36px; padding: 0.35rem 0.6rem; margin: 0; font-size: 0.85rem;
+  background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 6px;
+  display: inline-flex; align-items: center; gap: 0.35rem;
+}
+.theme-toggle:hover { color: var(--primary); background: var(--primary-soft); }
+
+main { max-width: 960px; margin: 1.5rem auto; padding: 0 1rem; }
+main:focus { outline: none; }
+
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); padding: 1.25rem; margin-bottom: 1rem;
+}
+.narrow { max-width: 420px; margin-inline: auto; }
+.split { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+.row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.row > div { display: flex; flex-direction: column; }
+.grow { flex: 1 1 200px; }
+.align-end { justify-content: flex-end; }
+
+label { font-weight: 600; font-size: 0.875rem; margin: 0.5rem 0 0.25rem; display: block; }
+label.inline { font-weight: 400; display: flex; gap: 0.5rem; align-items: center; }
+input, select {
+  font: inherit; padding: 0.5rem 0.65rem; border: 1px solid var(--border); border-radius: 6px; min-width: 0; width: 100%;
+  background: var(--card); color: var(--foreground);
+}
+input::placeholder { color: var(--muted); }
+input[type='checkbox'] { width: auto; accent-color: var(--primary-fill); }
+input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--primary); outline-offset: 2px;
+}
+input.ng-touched.ng-invalid { border-color: var(--danger); }
+fieldset { border: 1px solid var(--border); border-radius: var(--radius); margin: 1rem 0; padding: 1rem; }
+legend { font-weight: 600; padding: 0 0.25rem; }
+.passenger { border-bottom: 1px dashed var(--border); padding-bottom: 0.75rem; margin-bottom: 0.75rem; }
+
+button {
+  font: inherit; font-weight: 600; cursor: pointer; padding: 0.55rem 1rem; border-radius: 8px; margin-top: 0.75rem;
+  border: 1px solid var(--primary-fill); background: var(--primary-fill); color: #fff; min-height: 44px; // touch target
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+button:hover:not(:disabled) { background: var(--primary-fill-hover); border-color: var(--primary-fill-hover); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+button.secondary { background: var(--card); color: var(--primary); border-color: var(--border); }
+button.secondary:hover:not(:disabled) { background: var(--primary-soft); border-color: var(--border); }
+button.danger { background: var(--danger-fill); border-color: var(--danger-fill); }
+button.danger:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); }
+button.link {
+  background: none; border: none; color: var(--primary); text-decoration: underline; padding: 0; min-height: auto;
+  font-weight: 500;
+}
+button.link:hover:not(:disabled) { background: none; }
+.actions { display: flex; gap: 0.75rem; }
+
+table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.925rem; }
+th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+th, td { text-align: left; padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--primary-soft); }
+
+.alert { padding: 0.75rem 1rem; border-radius: var(--radius); margin: 0.75rem 0; p { margin: 0.25rem 0; } }
+.alert-error { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger); }
+.alert-info { background: var(--primary-soft); color: var(--foreground); border: 1px solid var(--primary); }
+.field-error { color: var(--danger); font-size: 0.875rem; margin: 0.25rem 0; }
+.hint { color: var(--muted); font-size: 0.875rem; }
+
+.badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+.badge-ok { background: var(--success-bg); color: var(--success); }
+.badge-warn { background: var(--warning-bg); color: var(--warning); }
+.badge-muted { background: var(--background); color: var(--muted); border: 1px solid var(--border); }
+.avail { white-space: nowrap; }  // "AVAILABLE-3" must not split across lines on phones
+.avail.ok { color: var(--success); font-weight: 600; }
+
+.pay { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; button { margin: 0; } }
+.countdown { font-variant-numeric: tabular-nums; font-weight: 600; }
+.countdown.urgent { color: var(--danger); }
+.quote { display: grid; grid-template-columns: max-content auto; gap: 0.25rem 1rem; dd { margin: 0; } }
+.secret code { font-size: 1.1rem; letter-spacing: 0.1em; word-break: break-all; }
+.bookings { list-style: none; padding: 0; li { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;
+  padding: 0.6rem 0; border-bottom: 1px solid var(--border); } }
+
+@media print {
+  .topbar, .theme-toggle, .skip-link { display: none !important; }
+  :root, :root.dark { --background: #fff; --card: #fff; --foreground: #000; --muted: #333; --border: #ccc; }
+  .card { box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

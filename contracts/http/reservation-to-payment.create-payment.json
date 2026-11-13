@@ -1,0 +1,26 @@
+{
+  "description": "reservation-service asks payment-service for a payment intent for a held booking. MONEY: amount must round-trip exactly; reservation refuses an intent whose amount differs from the fare.",
+  "consumer": "reservation-service",
+  "provider": "payment-service",
+  "request": {
+    "method": "POST",
+    "path": "/internal/v1/payments",
+    "headers": { "Authorization": "Bearer <service token, scope payments:create>", "Idempotency-Key": "pnr-2400000018" },
+    "body": {
+      "pnr": "2400000018",
+      "userId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "amount": 2915.00,
+      "currency": "INR",
+      "payBy": "2026-11-12T05:45:00Z"
+    }
+  },
+  "response": {
+    "status": 201,
+    "body": {
+      "paymentId": "0b3f6a2e-58c1-4d7e-9a8b-2f1c3d4e5f60",
+      "checkoutUrl": "http://localhost:8083/sim-gateway/orders/ord_1/pay",
+      "amount": 2915.00,
+      "status": "CREATED"
+    }
+  }
+}

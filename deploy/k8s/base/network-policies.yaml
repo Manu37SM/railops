@@ -1,0 +1,199 @@
+# Zero trust inside the namespace: nothing talks to anything unless listed here. Enforced by GKE Dataplane V2.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-all}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-dns}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    # GKE metadata server (Workload Identity token exchange)
+    - to: [{ipBlock: {cidr: 169.254.169.252/32}}]
+      ports: [{protocol: TCP, port: 988}]
+    - to: [{ipBlock: {cidr: 169.254.169.254/32}}]
+      ports: [{protocol: TCP, port: 80}]
+    # Istio sidecars: xDS config and certificate signing from istiod (components/istio-mtls)
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: istio-system}}
+      ports: [{protocol: TCP, port: 15012}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-prometheus-scrape}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/part-of: railops}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: gmp-system}}   # Managed Prometheus
+      ports: [{protocol: TCP, port: 8080}, {protocol: TCP, port: 8090}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: web}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: web}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - ipBlock: {cidr: 35.191.0.0/16}
+        - ipBlock: {cidr: 130.211.0.0/22}
+      ports: [{protocol: TCP, port: 8080}]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: api-gateway}}
+      ports: [{protocol: TCP, port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: api-gateway}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: api-gateway}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: web}}
+      ports: [{protocol: TCP, port: 8080}]
+    - from:
+        - ipBlock: {cidr: 35.191.0.0/16}
+        - ipBlock: {cidr: 130.211.0.0/22}
+      ports: [{protocol: TCP, port: 8080}]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: identity-service}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: reservation-service}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: payment-service}}
+      ports: [{protocol: TCP, port: 8080}]
+    - to:
+        - ipBlock:
+            cidr: 10.20.1.0/29
+      ports: [{protocol: TCP, port: 6378}]  # redis
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: identity-service}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: identity-service}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: api-gateway}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: reservation-service}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: payment-service}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: notification-service}}
+      ports: [{protocol: TCP, port: 8080}]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.20.0.0/24
+      ports: [{protocol: TCP, port: 3307}]  # sql
+    - to:
+        - ipBlock: {cidr: 199.36.153.8/30}   # private.googleapis.com: Cloud SQL Admin API (proxy's ephemeral certs)
+      ports: [{protocol: TCP, port: 443}]
+    - to:
+        - ipBlock:
+            cidr: 10.20.2.0/24
+      ports: [{protocol: TCP, port: 9092}]  # kafka
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: reservation-service}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: reservation-service}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: api-gateway}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: notification-service}}
+      ports: [{protocol: TCP, port: 8080}]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: identity-service}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: payment-service}}
+      ports: [{protocol: TCP, port: 8080}]
+    - to:
+        - ipBlock:
+            cidr: 10.20.0.0/24
+      ports: [{protocol: TCP, port: 3307}]  # sql
+    - to:
+        - ipBlock: {cidr: 199.36.153.8/30}   # private.googleapis.com: Cloud SQL Admin API (proxy's ephemeral certs)
+      ports: [{protocol: TCP, port: 443}]
+    - to:
+        - ipBlock:
+            cidr: 10.20.2.0/24
+      ports: [{protocol: TCP, port: 9092}]  # kafka
+    - to:
+        - ipBlock:
+            cidr: 10.20.1.0/29
+      ports: [{protocol: TCP, port: 6378}]  # redis
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: payment-service}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: payment-service}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: api-gateway}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: reservation-service}}
+      ports: [{protocol: TCP, port: 8080}]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: identity-service}}
+      ports: [{protocol: TCP, port: 8080}]
+    - to:
+        - ipBlock:
+            cidr: 10.20.0.0/24
+      ports: [{protocol: TCP, port: 3307}]  # sql
+    - to:
+        - ipBlock: {cidr: 199.36.153.8/30}   # private.googleapis.com: Cloud SQL Admin API (proxy's ephemeral certs)
+      ports: [{protocol: TCP, port: 443}]
+    - to:
+        - ipBlock:
+            cidr: 10.20.2.0/24
+      ports: [{protocol: TCP, port: 9092}]  # kafka
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+      ports: [{protocol: TCP, port: 443}]  # psp
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: notification-service}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: notification-service}}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: identity-service}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: reservation-service}}
+      ports: [{protocol: TCP, port: 8080}]
+    - to:
+        - ipBlock:
+            cidr: 10.20.0.0/24
+      ports: [{protocol: TCP, port: 3307}]  # sql
+    - to:
+        - ipBlock: {cidr: 199.36.153.8/30}   # private.googleapis.com: Cloud SQL Admin API (proxy's ephemeral certs)
+      ports: [{protocol: TCP, port: 443}]
+    - to:
+        - ipBlock:
+            cidr: 10.20.2.0/24
+      ports: [{protocol: TCP, port: 9092}]  # kafka
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+      ports: [{protocol: TCP, port: 443}]  # sms

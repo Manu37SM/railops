@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/BookingExpired.v1.schema.json",
+  "title": "BookingExpired",
+  "description": "Hold lapsed unpaid; inventory released.",
+  "type": "object",
+  "properties": {
+    "pnr": {
+      "type": "string",
+      "pattern": "^[0-9]{10}$"
+    },
+    "trainRunId": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "required": [
+    "pnr",
+    "trainRunId"
+  ],
+  "additionalProperties": false
+}

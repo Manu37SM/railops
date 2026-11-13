@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/WaitlistChartCancelled.v1.schema.json",
+  "title": "WaitlistChartCancelled",
+  "description": "Still-WL passengers dropped at chart 1. Consumers: notification.",
+  "type": "object",
+  "properties": {
+    "pnr": {
+      "type": "string",
+      "pattern": "^[0-9]{10}$"
+    },
+    "passengers": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "refundAmount": {
+      "type": "number",
+      "minimum": 0
+    },
+    "bookingStatus": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "pnr",
+    "passengers",
+    "refundAmount",
+    "bookingStatus"
+  ],
+  "additionalProperties": false
+}

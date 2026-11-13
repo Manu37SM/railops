@@ -1,0 +1,329 @@
+# RailOps full stack for integration environments, demos and CI e2e. NOT production (see deploy/k8s).
+#
+#   scripts/gen-secrets.sh                       # once: random secrets into deploy/secrets/ (git-ignored)
+#   docker compose -f deploy/compose/docker-compose.yml up -d --build
+#   open http://localhost:8088                   # the only published port (plus 8080 for API clients)
+#
+# Simulated payment gateway and fare table ("sim" profile): there is no real PSP or catalog-service yet.
+# Networks: "edge" reaches web + gateway only. "backend" is internal: databases, Kafka, Redis and the services are
+# unreachable from the host, and /internal/** is only callable service-to-service.
+
+name: railops
+
+x-java: &java
+  restart: unless-stopped
+  read_only: true                 # same as k8s readOnlyRootFilesystem: only /tmp is writable
+  tmpfs: ["/tmp:size=256m"]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  networks: [backend]
+  stop_grace_period: 40s          # server.shutdown=graceful (30 s) + Kafka consumer close
+  deploy:
+    resources:
+      limits: {memory: 768m, cpus: "1.0"}
+  depends_on: &java-deps
+    postgres: {condition: service_healthy}
+    kafka: {condition: service_healthy}
+
+# Schema migrations: one-shot containers from the SAME image, holding the owner credentials only for seconds.
+# The long-running services get spring.flyway.enabled=false and the DML-only role (in.railops.common.db.Migrate).
+x-migrate: &migrate
+  restart: "no"
+  read_only: true
+  tmpfs: ["/tmp:size=64m"]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  networks: [backend]
+  healthcheck: {disable: true}
+  entrypoint: ["java", "-cp", "/opt/app/BOOT-INF/classes:/opt/app/BOOT-INF/lib/*", "in.railops.common.db.Migrate"]
+  depends_on:
+    postgres: {condition: service_healthy}
+
+x-java-env: &java-env
+  KAFKA_BOOTSTRAP: kafka:9092
+  RAILOPS_KAFKA_REPLICAS: "1"
+  JWT_ISSUER: https://identity.railops.local
+  JWK_SET_URI: http://identity-service:8080/.well-known/jwks.json
+  TOKEN_URI: http://identity-service:8080/oauth2/token
+  REDIS_HOST: redis
+  SPRING_FLYWAY_ENABLED: "false"     # migrated by <service>-migrate before start; app role can't run DDL anyway
+  # Connection budget (docs/deployment.md §4): 4 services x 1 replica here; postgres max_connections=200.
+  DB_URL: jdbc:postgresql://postgres:5432/railops
+
+services:
+  # --------------------------------------------------------------------------------------------- data stores
+  postgres:
+    image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: railops
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+      TZ: UTC
+    command: ["postgres", "-c", "max_connections=200", "-c", "shared_buffers=256MB", "-c", "timezone=UTC",
+              "-c", "log_min_duration_statement=500", "-c", "log_lock_waits=on"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/10-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    secrets:
+      - postgres_superuser_password
+      - reservation_owner_db_password
+      - reservation_app_db_password
+      - identity_owner_db_password
+      - identity_app_db_password
+      - payment_owner_db_password
+      - payment_app_db_password
+      - notification_owner_db_password
+      - notification_app_db_password
+      - ops_readonly_db_password
+      - ops_breakglass_db_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d railops"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  redis:
+    image: redis:7.4-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+    restart: unless-stopped
+    # Cache + waiting room + rate limits: all rebuildable, so no persistence. Password from the secret file.
+    command: ["sh", "-c", "exec redis-server --save '' --appendonly no --maxmemory 256mb --maxmemory-policy volatile-lru --requirepass \"$$(cat /run/secrets/redis_password)\""]
+    secrets: [redis_password]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$(cat /run/secrets/redis_password)\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  kafka:
+    image: apache/kafka:3.9.1@sha256:4ceccc577f03f51f6af8dbfda55194d0d892f4fa7913ffbded567ce3895622ed
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"     # services declare their topics (and DLTs) explicitly
+      KAFKA_LOG_RETENTION_HOURS: 168
+    volumes: [kafkadata:/var/lib/kafka/data]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+    networks: [backend]
+
+  # -------------------------------------------------------------------------------------------------- services
+  identity-migrate:
+    <<: *migrate
+    image: railops/identity-service:${RAILOPS_TAG:-dev}
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/railops
+      DB_MIGRATION_USER: identity_owner
+      DB_MIGRATION_PASSWORD_FILE: /run/secrets/db_owner_password
+      DB_SCHEMA: identity
+      APP_ROLE: identity_app
+    secrets:
+      - {source: identity_owner_db_password, target: db_owner_password}
+
+  identity-service:
+    <<: *java
+    image: railops/identity-service:${RAILOPS_TAG:-dev}
+    build: {context: ../.., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: identity-service}}
+    depends_on:
+      <<: *java-deps
+      identity-migrate: {condition: service_completed_successfully}
+    environment:
+      RAILOPS_RAILLENS_BASE_URL: ${RAILLENS_API_URL:-https://raillens-train-db.onrender.com/api/v1}
+      <<: *java-env
+      DB_USER: identity_app
+      ALLOWED_ORIGINS: http://localhost:8088
+      BOOTSTRAP_ADMIN_EMAIL: root.admin@railops.local
+    secrets:
+      - {source: identity_app_db_password, target: spring.datasource.password}
+      - {source: jwt_private_key.pem, target: railops.jwt.private-key-pem}
+      - {source: field_enc_key, target: railops.crypto.enc-key}
+      - {source: phone_hmac_key, target: railops.crypto.hmac-key}
+      - {source: service_clients, target: railops.service-clients}
+      # One-time: creates the first admin on an empty database. Remove after the admin has enrolled MFA.
+      - {source: bootstrap_admin_password, target: railops.bootstrap.admin-password}
+
+  reservation-migrate:
+    <<: *migrate
+    image: railops/reservation-service:${RAILOPS_TAG:-dev}
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/railops
+      DB_MIGRATION_USER: reservation_owner
+      DB_MIGRATION_PASSWORD_FILE: /run/secrets/db_owner_password
+      DB_SCHEMA: reservation
+      APP_ROLE: reservation_app
+    secrets:
+      - {source: reservation_owner_db_password, target: db_owner_password}
+
+  reservation-service:
+    <<: *java
+    image: railops/reservation-service:${RAILOPS_TAG:-dev}
+    build: {context: ../.., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: reservation-service}}
+    depends_on:
+      <<: *java-deps
+      reservation-migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+      identity-service: {condition: service_healthy}   # needs its JWKS and token endpoint
+    environment:
+      <<: *java-env
+      SPRING_PROFILES_ACTIVE: sim
+      RAILOPS_PAYMENTS_SIMULATED: "true"   # Phase 5: payment-service is simulated here too
+      DB_USER: reservation_app
+      DB_POOL_SIZE: "30"
+      PAYMENT_URL: http://payment-service:8080
+      # Timetables for "Open a train for booking" (Phase 3B). A RailLens backend on your machine: http://host.docker.internal:8080/api/v1
+      RAILOPS_RAILLENS_BASE_URL: ${RAILLENS_API_URL:-https://raillens-train-db.onrender.com/api/v1}
+    secrets:
+      - {source: reservation_app_db_password, target: spring.datasource.password}
+      - {source: redis_password, target: spring.data.redis.password}
+      - {source: contact_enc_key, target: railops.crypto.contact-enc-key}
+      - {source: contact_hmac_key, target: railops.crypto.contact-hmac-key}
+      - {source: reservation_client_secret, target: railops.security.client-secret}
+
+  payment-migrate:
+    <<: *migrate
+    image: railops/payment-service:${RAILOPS_TAG:-dev}
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/railops
+      DB_MIGRATION_USER: payment_owner
+      DB_MIGRATION_PASSWORD_FILE: /run/secrets/db_owner_password
+      DB_SCHEMA: payment
+      APP_ROLE: payment_app
+    secrets:
+      - {source: payment_owner_db_password, target: db_owner_password}
+
+  payment-service:
+    <<: *java
+    image: railops/payment-service:${RAILOPS_TAG:-dev}
+    build: {context: ../.., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: payment-service}}
+    depends_on:
+      <<: *java-deps
+      payment-migrate: {condition: service_completed_successfully}
+      identity-service: {condition: service_healthy}
+    environment:
+      <<: *java-env
+      SPRING_PROFILES_ACTIVE: sim
+      DB_USER: payment_app
+      RAILOPS_SIMGATEWAY_WEBHOOKURL: http://payment-service:8080/webhooks/simgw
+    secrets:
+      - {source: payment_app_db_password, target: spring.datasource.password}
+      - {source: webhook_secret, target: railops.gateway.webhook-secret}
+
+  notification-migrate:
+    <<: *migrate
+    image: railops/notification-service:${RAILOPS_TAG:-dev}
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/railops
+      DB_MIGRATION_USER: notification_owner
+      DB_MIGRATION_PASSWORD_FILE: /run/secrets/db_owner_password
+      DB_SCHEMA: notification
+      APP_ROLE: notification_app
+    secrets:
+      - {source: notification_owner_db_password, target: db_owner_password}
+
+  notification-service:
+    <<: *java
+    image: railops/notification-service:${RAILOPS_TAG:-dev}
+    build: {context: ../.., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: notification-service}}
+    depends_on:
+      <<: *java-deps
+      notification-migrate: {condition: service_completed_successfully}
+      reservation-service: {condition: service_healthy}
+    environment:
+      <<: *java-env
+      DB_USER: notification_app
+      RESERVATION_URL: http://reservation-service:8080
+    secrets:
+      - {source: notification_app_db_password, target: spring.datasource.password}
+      - {source: notification_client_secret, target: railops.security.client-secret}
+
+  # ------------------------------------------------------------------------------------------------------- edge
+  api-gateway:
+    <<: *java
+    image: railops/api-gateway:${RAILOPS_TAG:-dev}
+    build: {context: ../.., dockerfile: deploy/docker/service.Dockerfile, args: {SERVICE: api-gateway}}
+    depends_on:
+      redis: {condition: service_healthy}
+      identity-service: {condition: service_healthy}
+    environment:
+      REDIS_HOST: redis
+      IDENTITY_URL: http://identity-service:8080
+      RESERVATION_URL: http://reservation-service:8080
+      PAYMENT_URL: http://payment-service:8080
+      JWK_SET_URI: http://identity-service:8080/.well-known/jwks.json
+      HEALTH_PORT: "8090"
+      # Only the web container (nginx) may set X-Forwarded-For; it sits on the edge network's fixed subnet.
+      RAILOPS_EDGE_TRUSTED_PROXIES: 172.30.0.0/24
+    secrets:
+      - {source: redis_password, target: spring.data.redis.password}
+    networks:
+      edge: {ipv4_address: 172.30.0.10}
+      backend: {}
+    ports: ["8080:8080"]          # API clients; browsers use the web origin below
+
+  web:
+    image: railops/web:${RAILOPS_TAG:-dev}
+    build: {context: ../.., dockerfile: deploy/docker/web.Dockerfile}
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    depends_on:
+      api-gateway: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      edge: {ipv4_address: 172.30.0.20}
+    ports: ["8088:8080"]
+
+networks:
+  edge:
+    ipam: {config: [{subnet: 172.30.0.0/24}]}
+  backend:
+    internal: true                # no route to or from the host: data stores and /internal/** stay private
+
+volumes:
+  pgdata:
+  kafkadata:
+
+secrets:
+  postgres_superuser_password: {file: ../secrets/postgres_superuser_password}
+  reservation_owner_db_password: {file: ../secrets/reservation_owner_db_password}
+  reservation_app_db_password: {file: ../secrets/reservation_app_db_password}
+  identity_owner_db_password: {file: ../secrets/identity_owner_db_password}
+  identity_app_db_password: {file: ../secrets/identity_app_db_password}
+  payment_owner_db_password: {file: ../secrets/payment_owner_db_password}
+  payment_app_db_password: {file: ../secrets/payment_app_db_password}
+  notification_owner_db_password: {file: ../secrets/notification_owner_db_password}
+  notification_app_db_password: {file: ../secrets/notification_app_db_password}
+  ops_readonly_db_password: {file: ../secrets/ops_readonly_db_password}
+  ops_breakglass_db_password: {file: ../secrets/ops_breakglass_db_password}
+  redis_password: {file: ../secrets/redis_password}
+  jwt_private_key.pem: {file: ../secrets/jwt_private_key.pem}
+  field_enc_key: {file: ../secrets/field_enc_key}
+  phone_hmac_key: {file: ../secrets/phone_hmac_key}
+  contact_enc_key: {file: ../secrets/contact_enc_key}
+  contact_hmac_key: {file: ../secrets/contact_hmac_key}
+  webhook_secret: {file: ../secrets/webhook_secret}
+  reservation_client_secret: {file: ../secrets/reservation_client_secret}
+  notification_client_secret: {file: ../secrets/notification_client_secret}
+  service_clients: {file: ../secrets/service_clients}
+  bootstrap_admin_password: {file: ../secrets/bootstrap_admin_password}

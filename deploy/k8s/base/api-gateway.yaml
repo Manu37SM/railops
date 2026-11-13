@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-gateway
+  annotations:
+    # Workload Identity: this KSA acts as the GSA below (Cloud SQL client, Secret Manager accessor for its own
+    # secrets only). No JSON keys anywhere.
+    iam.gke.io/gcp-service-account: api-gateway@PROJECT_ID.iam.gserviceaccount.com
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  labels: {app.kubernetes.io/name: api-gateway, app.kubernetes.io/part-of: railops}
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: {app.kubernetes.io/name: api-gateway}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}   # never below desired capacity during a deploy
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: api-gateway, app.kubernetes.io/part-of: railops}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8090"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      serviceAccountName: api-gateway
+      automountServiceAccountToken: false
+      # preStop sleep (endpoint removal propagates) + graceful shutdown (30 s) + margin
+      terminationGracePeriodSeconds: 50
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: {matchLabels: {app.kubernetes.io/name: api-gateway}}
+      initContainers: []
+      containers:
+        - name: app
+          image: europe-docker.pkg.dev/railops-prod/railops/api-gateway:IMAGE_TAG
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: management, containerPort: 8090}
+          envFrom:
+            - configMapRef: {name: railops-platform}
+            - configMapRef: {name: api-gateway}
+          env:
+            - name: SPRING_CONFIG_IMPORT
+              value: optional:configtree:/run/secrets/
+          volumeMounts:
+            - {name: secrets, mountPath: /run/secrets, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+          # Startup can take ~30 s (Flyway validation is off, but Kafka/JPA init isn't instant): liveness only
+          # starts judging after startup succeeds, so a slow start is never killed into a crash loop.
+          startupProbe:
+            httpGet: {path: /actuator/health/liveness, port: 8090}
+            periodSeconds: 3
+            failureThreshold: 40
+          livenessProbe:   # process health only: never dependencies, or a DB blip restarts every pod at once
+            httpGet: {path: /actuator/health/liveness, port: 8090}
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: 8090}
+            periodSeconds: 5
+            failureThreshold: 2
+          lifecycle:
+            preStop:
+              sleep: {seconds: 10}   # let kube-proxy / NEGs stop routing here before Spring starts draining
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {memory: 768Mi}   # no CPU limit: throttling a JVM hurts latency more than sharing spare CPU
+          securityContext: 
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+        - name: secrets
+          secret:
+            secretName: api-gateway
+            defaultMode: 0400
+            items:
+                  - key: redis-password
+                    path: spring.data.redis.password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  labels: {app.kubernetes.io/name: api-gateway}
+spec:
+  selector: {app.kubernetes.io/name: api-gateway}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: api-gateway}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/BookingInitiated.v1.schema.json",
+  "title": "BookingInitiated",
+  "description": "A booking hold was created; payment pending.",
+  "type": "object",
+  "properties": {
+    "pnr": {
+      "type": "string",
+      "pattern": "^[0-9]{10}$"
+    },
+    "trainRunId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "runDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "classCode": {
+      "type": "string",
+      "pattern": "^(1A|2A|3A|3E|SL|CC|EC|2S)$"
+    },
+    "quotaCode": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$"
+    },
+    "fromSeq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "toSeq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "totalFare": {
+      "type": "number",
+      "minimum": 0
+    },
+    "passengerCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6
+    },
+    "holdExpiresAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "pnr",
+    "trainRunId",
+    "runDate",
+    "classCode",
+    "quotaCode",
+    "fromSeq",
+    "toSeq",
+    "totalFare",
+    "passengerCount",
+    "holdExpiresAt"
+  ],
+  "additionalProperties": false
+}

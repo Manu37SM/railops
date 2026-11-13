@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [../../base]
+components: [../../components/istio-mtls]
+images:   # release pipeline pins digests: newTag is never a mutable tag in prod
+  - {name: europe-docker.pkg.dev/railops-prod/railops/identity-service, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  - {name: europe-docker.pkg.dev/railops-prod/railops/reservation-service, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  - {name: europe-docker.pkg.dev/railops-prod/railops/payment-service, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  - {name: europe-docker.pkg.dev/railops-prod/railops/notification-service, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  - {name: europe-docker.pkg.dev/railops-prod/railops/api-gateway, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  - {name: europe-docker.pkg.dev/railops-prod/railops/web, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+patches:
+  - target: {kind: ConfigMap, name: railops-platform}
+    patch: |-
+      - {op: replace, path: /data/CLOUDSQL_INSTANCE, value: "railops-prod:asia-south1:railops-pg"}
+      - {op: replace, path: /data/KAFKA_BOOTSTRAP, value: "bootstrap.railops-prod.asia-south1.managedkafka.railops-prod.cloud.goog:9092"}
+      - {op: replace, path: /data/REDIS_HOST, value: "10.20.1.4"}
+  - target: {kind: ConfigMap, name: api-gateway}
+    patch: |-
+      - {op: replace, path: /data/RAILOPS_EDGE_TRUSTED_PROXIES, value: "35.191.0.0/16,130.211.0.0/22,10.52.0.0/14,LB_FRONTEND_IP/32"}   # GFE ranges, pod CIDR, and the LB VIP Google appends to X-Forwarded-For
+  - target: {kind: ClusterSecretStore, name: gcp-secret-manager}
+    patch: |-
+      - {op: replace, path: /spec/provider/gcpsm/projectID, value: railops-prod}
+      - {op: replace, path: /spec/provider/gcpsm/auth/workloadIdentity/clusterLocation, value: asia-south1}
+  # No "sim" profile in prod: payment-service fails at startup until a real PSP adapter (GatewayPort) exists,
+  # and reservation needs catalog-service for fares. Both are deliberate, loud failures.

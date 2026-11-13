@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/RefundRequested.v1.schema.json",
+  "title": "RefundRequested",
+  "description": "MONEY. Asks payment-service to refund. idempotencyKey makes it at-most-once across redeliveries.",
+  "type": "object",
+  "properties": {
+    "pnr": {
+      "type": "string",
+      "pattern": "^[0-9]{10}$"
+    },
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "reason": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z_]{2,40}$",
+      "description": "Opaque to payment-service (stored, shown to ops). Known: USER_CANCELLATION, CHART_WAITLIST, RUN_CANCELLED, AMOUNT_MISMATCH, UNKNOWN_PNR, SUPERSEDED_PAYMENT, LATE_PAYMENT_NO_INVENTORY, BOOKING_<status>."
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 100
+    }
+  },
+  "required": [
+    "pnr",
+    "paymentId",
+    "amount",
+    "reason",
+    "idempotencyKey"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/BookingCancelled.v1.schema.json",
+  "title": "BookingCancelled",
+  "description": "Passenger-initiated cancellation. Consumers: notification.",
+  "type": "object",
+  "properties": {
+    "pnr": {
+      "type": "string",
+      "pattern": "^[0-9]{10}$"
+    },
+    "cancellationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "passengers": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "refundAmount": {
+      "type": "number",
+      "minimum": 0
+    },
+    "bookingStatus": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "pnr",
+    "cancellationId",
+    "passengers",
+    "refundAmount",
+    "bookingStatus"
+  ],
+  "additionalProperties": false
+}

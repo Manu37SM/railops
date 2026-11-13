@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: in.railops.reservation.it.BookingLifecycleIT
+-------------------------------------------------------------------------------
+Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.258 s -- in in.railops.reservation.it.BookingLifecycleIT

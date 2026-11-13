@@ -1,0 +1,1356 @@
+openapi: 3.1.0
+info:
+  title: RailOps Reservation API
+  description: "Booking, payment intent, cancellation, availability and staff operations.\
+    \ Errors are RFC 9457 problem details with a stable `code`. Mutations that move\
+    \ money or inventory require an `Idempotency-Key` header."
+  version: v1
+servers:
+- url: http://localhost:8081
+  description: Generated server url
+tags:
+- name: Availability
+  description: Public seat availability (no login required)
+- name: Staff
+  description: Scoped staff operations (MFA required)
+- name: Bookings
+  description: "Passenger booking lifecycle: book, pay, view, cancel"
+paths:
+  /api/v1/runs/{runId}/seat-map:
+    get:
+      tags:
+      - Availability
+      summary: Live seat map of a class for a journey
+      description: "Phase 6. Public. Per coach: each berth or seat with its type and FREE / RAC_HALF / TAKEN over the journey's segments, from RailOps' own bookings (held or confirmed). Never says who booked. Cached 5 s, like availability."
+      operationId: seatMap
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          minimum: 1
+          type: integer
+          format: int64
+      - name: class
+        in: query
+        required: true
+        schema:
+          pattern: 1A|2A|3A|3E|SL|CC|EC|2S
+          type: string
+      - name: from
+        in: query
+        required: true
+        schema:
+          minimum: 0
+          type: integer
+      - name: to
+        in: query
+        required: true
+        schema:
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          description: Coaches with their berths
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeatMap"
+        "404":
+          description: RES_RUN_NOT_FOUND
+        "422":
+          description: RES_INVALID_JOURNEY
+  /api/v1/bookings/{pnr}/simulated-payment:
+    post:
+      tags:
+      - Bookings
+      summary: Finish the simulated checkout for my unpaid booking (demo only)
+      description: "Phase 5. Only where the server runs simulated payments; otherwise 404 RES_SIMULATED_PAYMENTS_OFF. SUCCESS or FAILURE. The booking changes status a few seconds later, as with a real gateway: poll GET /bookings/{pnr}. No money moves."
+      operationId: simulatedPayment
+      parameters:
+      - name: pnr
+        in: path
+        required: true
+        schema:
+          pattern: "^[1-9][0-9]{9}$"
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulatedPaymentRequest"
+        required: true
+      responses:
+        "202":
+          description: Outcome sent to the simulated gateway
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentIntent"
+        "404":
+          description: RES_BOOKING_NOT_FOUND or RES_SIMULATED_PAYMENTS_OFF
+        "410":
+          description: RES_HOLD_EXPIRED
+  /api/v1/runs:
+    get:
+      tags:
+      - Availability
+      summary: Find the run of a train on a date
+      description: "Phase 5. Public. Stops (with the stop numbers availability and booking take) and the classes on sale. 404 RES_RUN_NOT_FOUND when the train isn't open for booking on that date."
+      operationId: findRun
+      parameters:
+      - name: trainNo
+        in: query
+        required: true
+        schema:
+          pattern: "\\d{5}"
+          type: string
+      - name: date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunSummary"
+        "404":
+          description: RES_RUN_NOT_FOUND
+  /api/v1/runs/{runId}:
+    get:
+      tags:
+      - Availability
+      summary: One run by id
+      description: Public. Same shape as the search above.
+      operationId: runById
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          minimum: 1
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunSummary"
+        "404":
+          description: RES_RUN_NOT_FOUND
+  /api/v1/staff/runs/{runId}/charts:
+    post:
+      tags:
+      - Staff
+      summary: Prepare chart 1 or 2 for a run
+      description: "CONTROLLER scoped to a station/division/zone on the run, or ADMIN;\
+        \ MFA required. Idempotent; audited."
+      operationId: prepareChart
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChartRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChartResult"
+      security:
+      - bearer: []
+  /api/v1/bookings:
+    get:
+      tags:
+      - Bookings
+      summary: "List my bookings, newest first"
+      description: "Keyset pagination: pass nextCursor from the previous page as cursor.\
+        \ Cursors are opaque."
+      operationId: list
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 200
+          minLength: 0
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+          maximum: 50
+          minimum: 1
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BookingPage"
+      security:
+      - bearer: []
+    post:
+      tags:
+      - Bookings
+      summary: Create a booking and hold seats for 10 minutes
+      description: "Allocates CNF, then RAC, then WL per passenger. Retrying with\
+        \ the same Idempotency-Key returns the original booking; the same key with\
+        \ a different body is rejected (422 IDEM_KEY_REUSED)."
+      operationId: create
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: "Client-generated, unique per logical booking attempt"
+        required: true
+        schema:
+          type: string
+          pattern: "^[A-Za-z0-9-]{16,64}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+        required: true
+      responses:
+        "201":
+          description: "Booking created, PENDING_PAYMENT"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BookingView"
+        "409":
+          description: "RES_REGRET, RES_ONLY_IF_CNF_UNMET, RES_RUN_NOT_BOOKABLE"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "422":
+          description: "RES_QUOTA_INELIGIBLE, RES_INVALID_JOURNEY, IDEM_KEY_REUSED"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearer: []
+  /api/v1/bookings/{pnr}/payment-intent:
+    post:
+      tags:
+      - Bookings
+      summary: Create or fetch the payment intent for an unpaid booking
+      description: "The amount is always the server-side fare. Safe to call repeatedly:\
+        \ one live payment per PNR."
+      operationId: paymentIntent
+      parameters:
+      - name: pnr
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[1-9][0-9]{9}$"
+      responses:
+        "201":
+          description: Intent with a gateway checkout URL
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PaymentIntent"
+        "410":
+          description: RES_HOLD_EXPIRED
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "503":
+          description: PAYMENT_UNAVAILABLE (retry with backoff)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearer: []
+  /api/v1/bookings/{pnr}/cancellations:
+    post:
+      tags:
+      - Bookings
+      summary: Cancel some or all passengers
+      description: "Idempotent: the refund is requested at most once per Idempotency-Key.\
+        \ Unpaid bookings can only be cancelled whole. Children without a berth can't\
+        \ remain without an adult who has one."
+      operationId: cancel
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          pattern: "^[A-Za-z0-9-]{16,64}$"
+      - name: pnr
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[1-9][0-9]{9}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelRequest"
+      responses:
+        "200":
+          description: Cancellation applied; refund requested if any is due
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationView"
+        "409":
+          description: RES_CANCELLATION_CLOSED
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearer: []
+  /api/v1/staff/runs/{runId}/occupancy:
+    get:
+      tags:
+      - Staff
+      summary: Occupancy per class and quota
+      description: Any staff role whose scope covers a station on the run; MFA required.
+        Every access is audited.
+      operationId: occupancy
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PoolOccupancy"
+      security:
+      - bearer: []
+  /api/v1/staff/runs/{runId}/analytics:
+    get:
+      tags:
+      - Staff
+      summary: "Run analytics: occupancy, WL funnel, cancellations, indicative revenue"
+      description: Same access rule as occupancy (scoped staff, MFA). Money is indicative;
+        the payment ledger is authoritative. Audited.
+      operationId: analytics
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RunAnalytics"
+      security:
+      - bearer: []
+  /api/v1/runs/{runId}/wl-prediction:
+    get:
+      tags:
+      - Predictions
+      summary: Chance that the next waitlist number for this pool confirms
+      description: "For a single passenger booking now. Public and cacheable for 60 s.\
+        \ Advisory: never used for allocation. Present only when the feature is enabled."
+      operationId: forPool
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+      - name: class
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: 1A|2A|3A|3E|SL|CC|EC|2S
+      - name: quota
+        in: query
+        required: false
+        schema:
+          type: string
+          default: GN
+          pattern: GN|LD|SS|TQ|PT|DF|FT|HP|PQ|RL
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Prediction"
+  /api/v1/bookings/{pnr}/wl-prediction:
+    get:
+      tags:
+      - Predictions
+      summary: Chance that my waitlisted booking confirms by chart time
+      description: "probability is null with a reason when there is no estimate (not\
+        \ waitlisted, chart prepared, class/quota not covered by the model). 404 for\
+        \ unknown and foreign PNRs alike."
+      operationId: forBooking
+      parameters:
+      - name: pnr
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[1-9][0-9]{9}$"
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Prediction"
+      security:
+      - bearer: []
+  /api/v1/staff/ml/wl-model:
+    get:
+      tags:
+      - Predictions
+      summary: WL model version and realised calibration over the last 30 days
+      description: ADMIN, MFA.
+      operationId: health
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ModelHealth"
+      security:
+      - bearer: []
+  /api/v1/runs/{runId}/availability:
+    get:
+      tags:
+      - Availability
+      summary: Availability per class and quota for a journey
+      description: "Advisory and briefly cacheable: the booking call re-checks under\
+        \ locks. Display values: AVAILABLE-n, RAC-n, WL-n (next WL number), REGRET,\
+        \ BOOKING_CLOSED."
+      operationId: availability
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int32
+          minimum: 1
+      - name: class
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: 1A|2A|3A|3E|SL|CC|EC|2S
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RunAvailability"
+  /api/v1/bookings/{pnr}:
+    get:
+      tags:
+      - Bookings
+      summary: Get one of my bookings
+      description: 404 both when the PNR doesn't exist and when it isn't yours.
+      operationId: get
+      parameters:
+      - name: pnr
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[1-9][0-9]{9}$"
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BookingView"
+      security:
+      - bearer: []
+  /api/v1/bookings/{pnr}/cancellation-quote:
+    get:
+      tags:
+      - Bookings
+      summary: Preview the refund for cancelling some or all passengers
+      description: Omit passengers to quote the whole booking. The quote is valid
+        for the current clock window only.
+      operationId: quote
+      parameters:
+      - name: pnr
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[1-9][0-9]{9}$"
+      - name: passengers
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: integer
+            format: int32
+            maximum: 6
+            minimum: 1
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationView"
+      security:
+      - bearer: []
+  /api/v1/staff/runs/{runId}/cancel:
+    post:
+      tags:
+      - Staff
+      summary: Cancel a train run
+      description: "CONTROLLER in scope or ADMIN; MFA required. Blocks new bookings at once; every passenger\
+        \ is then refunded in full asynchronously (RunCancelled on ops.disruption.v1 drives a resumable\
+        \ bulk job). Idempotent; audited. MONEY: triggers refunds for every booking on the run."
+      operationId: cancelRun
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelRunRequest"
+        required: true
+      responses:
+        "202":
+          description: Run cancelled; refunds in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunCancellationAccepted"
+        "403":
+          description: Out of scope, or MFA missing
+        "409":
+          description: Run already departed or not cancellable
+      security:
+      - bearer: []
+  /api/v1/staff/runs/import:
+    post:
+      tags:
+      - Staff
+      summary: Create train runs from the RailLens timetable
+      description: "ADMIN with a GLOBAL grant; MFA required. Reads the train's timetable from RailLens and\
+        \ creates one run per date in [fromDate, toDate] (at most 62), with the coaches asked for. Seats come\
+        \ from the coach layouts (side-lowers are RAC); Tatkal takes tatkalPercent (default 10) of the confirmed\
+        \ seats; waitlist limit is waitlistPercent (default 50) of each quota. Booking opens 60 days before\
+        \ departure, Tatkal at 10:00 IST the day before, charts 4 h and 30 min before departure. A date that\
+        \ already has a run is left unchanged (ALREADY_EXISTS); past or too-far dates are SKIPPED. Safe to\
+        \ repeat. Each created run is audited."
+      operationId: importRuns
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportRunsRequest"
+        required: true
+      responses:
+        "200":
+          description: One result per date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "403":
+          description: Not a GLOBAL admin, or MFA missing
+        "404":
+          description: "RES_TIMETABLE_NOT_FOUND: the train is not in the RailLens timetable"
+        "422":
+          description: "RES_TIMETABLE_INVALID: the timetable or the request can't make a run (every problem\
+            \ is listed)"
+        "503":
+          description: "DEPENDENCY_UNAVAILABLE: RailLens could not be reached"
+      security:
+      - bearer: []
+  /api/v1/runs/{runId}/waiting-room:
+    post:
+      tags:
+      - Waiting room
+      summary: Join the waiting room for a run
+      description: "PASSENGER or AGENT. Joining before opensAt gives a uniformly random place among early\
+        \ joiners; after opensAt, first come first served. Re-joining keeps your place."
+      operationId: joinWaitingRoom
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: Your status in the room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaitingRoomStatus"
+      security:
+      - bearer: []
+    get:
+      tags:
+      - Waiting room
+      summary: My status in the waiting room
+      description: "Poll every few seconds. ADMITTED lasts 10 minutes; while a room is open, booking the\
+        \ run without admission returns 403 RES_WAITING_ROOM."
+      operationId: waitingRoomStatus
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: Your status in the room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaitingRoomStatus"
+      security:
+      - bearer: []
+  /api/v1/staff/runs/{runId}/waiting-room:
+    put:
+      tags:
+      - Staff
+      summary: Open (or reconfigure) the waiting room for a run
+      description: "CONTROLLER in scope or ADMIN; MFA required. Set admitPerSecond at or below half the\
+        \ measured pool ceiling (docs/performance.md)."
+      operationId: openWaitingRoom
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenWaitingRoomRequest"
+        required: true
+      responses:
+        "204":
+          description: Room open
+      security:
+      - bearer: []
+    delete:
+      tags:
+      - Staff
+      summary: Close the waiting room (kill switch)
+      description: CONTROLLER in scope or ADMIN; MFA required. Booking no longer requires admission.
+      operationId: closeWaitingRoom
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "204":
+          description: Room closed
+      security:
+      - bearer: []
+components:
+  schemas:
+    SeatMap:
+      type: object
+      properties:
+        runId:
+          type: integer
+          format: int64
+        classCode:
+          type: string
+        fromSeq:
+          type: integer
+        toSeq:
+          type: integer
+        coaches:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              free:
+                type: integer
+              berths:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    "no":
+                      type: integer
+                    type:
+                      type: string
+                      description: LB MB UB SL SU (berths) or WS MS AS (seats)
+                    state:
+                      type: string
+                      enum: [FREE, RAC_HALF, TAKEN]
+    SimulatedPaymentRequest:
+      required:
+      - outcome
+      type: object
+      properties:
+        outcome:
+          pattern: SUCCESS|FAILURE
+          type: string
+    RunSummary:
+      type: object
+      properties:
+        runId:
+          type: integer
+          format: int64
+        trainNo:
+          type: string
+        runDate:
+          type: string
+          format: date
+        status:
+          type: string
+        bookingOpensAt:
+          type: string
+          format: date-time
+        classes:
+          type: array
+          items:
+            type: string
+        stops:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunStop"
+    RunStop:
+      type: object
+      properties:
+        seq:
+          type: integer
+        stationCode:
+          type: string
+        arrival:
+          type: string
+          format: date-time
+        departure:
+          type: string
+          format: date-time
+        distanceKm:
+          type: integer
+        halt:
+          type: boolean
+    Prediction:
+      type: object
+      description: When there is no estimate, probability (and band) are OMITTED and reason says why (non_null serialisation). The disclaimer must be shown with any number.
+      properties:
+        probability:
+          type: number
+          format: double
+          nullable: true
+        band:
+          type: string
+          enum: [LOW, MEDIUM, HIGH]
+          nullable: true
+        modelVersion:
+          type: string
+        currentWlPosition:
+          type: integer
+          format: int32
+          nullable: true
+        reason:
+          type: string
+          enum: [NOT_WAITLISTED, NOT_COVERED, CHART_PREPARED, UNAVAILABLE]
+          nullable: true
+        disclaimer:
+          type: string
+    ModelHealth:
+      type: object
+      properties:
+        modelVersion: {type: string}
+        trainedOn: {type: string}
+        resolved30d: {type: integer, format: int64}
+        brier30d: {type: number, format: double, nullable: true}
+        meanPredicted30d: {type: number, format: double, nullable: true}
+        observedRate30d: {type: number, format: double, nullable: true}
+    PoolFunnel:
+      type: object
+      properties:
+        classCode: {type: string}
+        quotaCode: {type: string}
+        cnfCapacity: {type: integer, format: int32}
+        cnfPeakUsed: {type: integer, format: int32}
+        occupancy: {type: number, format: double}
+        wlIssued: {type: integer, format: int32}
+        wlPromoted: {type: integer, format: int32}
+        wlChartExpired: {type: integer, format: int32}
+        wlCancelled: {type: integer, format: int32}
+        wlOpen: {type: integer, format: int32}
+    RunAnalytics:
+      type: object
+      description: Money fields are indicative (reservation rows); the payment ledger is the system of record.
+      properties:
+        trainRunId: {type: integer, format: int64}
+        pools:
+          type: array
+          items: {$ref: "#/components/schemas/PoolFunnel"}
+        paidBookings: {type: integer, format: int64}
+        userCancellations: {type: integer, format: int64}
+        grossBookedFare: {type: number}
+        refunds: {type: number}
+        netIndicative: {type: number}
+        predictionsLogged: {type: integer, format: int64}
+        predictionsResolved: {type: integer, format: int64}
+        predictionBrier: {type: number, format: double, nullable: true}
+    ImportRunsRequest:
+      required:
+      - trainNo
+      - fromDate
+      - toDate
+      type: object
+      properties:
+        trainNo:
+          pattern: "\\d{5}"
+          type: string
+          example: "12951"
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+        consist:
+          pattern: "[A-Z_]{3,20}"
+          type: string
+          description: "Phase 6: a standard coach set instead of coaches: RAJDHANI, DURONTO, MAIL_EXPRESS, SHATABDI, VANDE_BHARAT, JAN_SHATABDI, GARIB_RATH. Give exactly one of consist or coaches."
+        coaches:
+          maxItems: 8
+          type: array
+          items:
+            required:
+            - travelClass
+            - count
+            type: object
+            properties:
+              travelClass:
+                type: string
+                enum: ["2A", "3A", "SL"]
+              count:
+                maximum: 24
+                minimum: 1
+                type: integer
+        tatkalPercent:
+          maximum: 50
+          minimum: 0
+          type: integer
+        waitlistPercent:
+          maximum: 200
+          minimum: 0
+          type: integer
+    ImportResult:
+      type: object
+      properties:
+        trainNo:
+          type: string
+        trainName:
+          type: string
+        stops:
+          type: integer
+        dates:
+          type: array
+          items:
+            type: object
+            properties:
+              runDate:
+                type: string
+                format: date
+              outcome:
+                type: string
+                enum: [CREATED, ALREADY_EXISTS, SKIPPED]
+              trainRunId:
+                type: integer
+                format: int64
+                nullable: true
+              detail:
+                type: string
+                nullable: true
+    CancelRunRequest:
+      required:
+      - reason
+      type: object
+      properties:
+        reason:
+          maxLength: 200
+          minLength: 1
+          type: string
+    RunCancellationAccepted:
+      type: object
+      properties:
+        trainRunId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+          - CANCELLED
+        refunds:
+          type: string
+          enum:
+          - IN_PROGRESS
+    OpenWaitingRoomRequest:
+      required:
+      - opensAt
+      - admitPerSecond
+      type: object
+      properties:
+        opensAt:
+          type: string
+          format: date-time
+        admitPerSecond:
+          maximum: 10000
+          minimum: 1
+          type: integer
+          format: int32
+    WaitingRoomStatus:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+          - NOT_REQUIRED
+          - NOT_JOINED
+          - QUEUED
+          - ADMITTED
+        position:
+          type: integer
+          format: int64
+          description: 1-based place in the queue (QUEUED only)
+        etaSeconds:
+          type: integer
+          format: int64
+          description: Rough estimate; time to opening plus position / admission rate
+        opensAt:
+          type: string
+          format: date-time
+    ChartRequest:
+      type: object
+      properties:
+        chartNo:
+          type: integer
+          format: int32
+          maximum: 2
+          minimum: 1
+    ChartResult:
+      type: object
+      properties:
+        runId:
+          type: integer
+          format: int64
+        chartNo:
+          type: integer
+          format: int32
+        status:
+          type: string
+        promoted:
+          type: integer
+          format: int32
+        chartCancelledBookings:
+          type: integer
+          format: int32
+        droppedWlPassengers:
+          type: integer
+          format: int32
+        expiredHolds:
+          type: integer
+          format: int32
+    CreateBookingRequest:
+      type: object
+      properties:
+        trainRunId:
+          type: integer
+          format: int64
+        fromStopSeq:
+          type: integer
+          format: int32
+          minimum: 0
+        toStopSeq:
+          type: integer
+          format: int32
+          minimum: 1
+        travelClass:
+          type: string
+          enum:
+          - 1A
+          - 2A
+          - 3A
+          - 3E
+          - SL
+          - CC
+          - EC
+          - 2S
+        quota:
+          type: string
+          enum:
+          - GN
+          - LD
+          - SS
+          - TQ
+          - PT
+          - DF
+          - FT
+          - HP
+          - PQ
+          - RL
+        passengers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PassengerRequest"
+          maxItems: 6
+          minItems: 1
+        onlyIfConfirmed:
+          type: boolean
+        contactPhone:
+          type: string
+          minLength: 1
+          pattern: "^\\+?[0-9 -]{10,16}$"
+        contactEmail:
+          type: string
+          format: email
+          maxLength: 254
+          minLength: 0
+      required:
+      - contactPhone
+      - passengers
+      - quota
+      - travelClass
+    PassengerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          minLength: 0
+          pattern: "^[\\p{L} .'-]+$"
+        age:
+          type: integer
+          format: int32
+          maximum: 125
+          minimum: 0
+        gender:
+          type: string
+          pattern: "[MFT]"
+        berthPreference:
+          type: string
+          pattern: LB|MB|UB|SL|SU|WS|MS|AS
+        berthRequired:
+          type: boolean
+      required:
+      - gender
+      - name
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type:
+          - string
+          - "null"
+        status:
+          type: integer
+          format: int32
+        detail:
+          type:
+          - string
+          - "null"
+        instance:
+          type:
+          - string
+          - "null"
+          format: uri
+        properties:
+          type:
+          - object
+          - "null"
+          additionalProperties: {}
+    BookingView:
+      type: object
+      properties:
+        pnr:
+          type: string
+        status:
+          type: string
+        trainRunId:
+          type: integer
+          format: int64
+        runDate:
+          type: string
+          format: date
+        classCode:
+          type: string
+        quotaCode:
+          type: string
+        fromSeq:
+          type: integer
+          format: int32
+        toSeq:
+          type: integer
+          format: int32
+        totalFare:
+          type: number
+        holdExpiresAt:
+          type: string
+          format: date-time
+        passengers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PassengerView"
+    PassengerView:
+      type: object
+      properties:
+        seqNo:
+          type: integer
+          format: int32
+        name:
+          type: string
+        age:
+          type: integer
+          format: int32
+        gender:
+          type: string
+        bookingStatus:
+          type: string
+        currentStatus:
+          type: string
+    PaymentIntent:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        checkoutUrl:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+    CancelRequest:
+      type: object
+      properties:
+        passengerSeqs:
+          type: array
+          items:
+            type: integer
+            format: int32
+            maximum: 6
+            minimum: 1
+          maxItems: 6
+          minItems: 0
+    CancellationView:
+      type: object
+      properties:
+        cancellationId:
+          type: string
+          format: uuid
+        pnr:
+          type: string
+        bookingStatus:
+          type: string
+        cancelled:
+          type: array
+          items:
+            type: integer
+            format: int32
+        totalPaid:
+          type: number
+        totalCharge:
+          type: number
+        refundAmount:
+          type: number
+        breakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/PassengerRefund"
+    PassengerRefund:
+      type: object
+      properties:
+        seqNo:
+          type: integer
+          format: int32
+        paid:
+          type: number
+        charge:
+          type: number
+        refund:
+          type: number
+        rule:
+          type: string
+    PoolOccupancy:
+      type: object
+      properties:
+        classCode:
+          type: string
+        quotaCode:
+          type: string
+        cnfCapacity:
+          type: integer
+          format: int32
+        cnfPeakUsed:
+          type: integer
+          format: int32
+        racCapacity:
+          type: integer
+          format: int32
+        racPeakUsed:
+          type: integer
+          format: int32
+        wlIssued:
+          type: integer
+          format: int32
+    PoolAvailability:
+      type: object
+      properties:
+        classCode:
+          type: string
+        quotaCode:
+          type: string
+        cnfFree:
+          type: integer
+          format: int32
+        racSlotsFree:
+          type: integer
+          format: int32
+        nextWlNumber:
+          type: integer
+          format: int32
+        wlRemaining:
+          type: integer
+          format: int32
+        display:
+          type: string
+    RunAvailability:
+      type: object
+      properties:
+        trainRunId:
+          type: integer
+          format: int64
+        runStatus:
+          type: string
+        fromSeq:
+          type: integer
+          format: int32
+        toSeq:
+          type: integer
+          format: int32
+        pools:
+          type: array
+          items:
+            $ref: "#/components/schemas/PoolAvailability"
+    BookingPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookingSummary"
+        nextCursor:
+          type: string
+    BookingSummary:
+      type: object
+      properties:
+        pnr:
+          type: string
+        status:
+          type: string
+        trainRunId:
+          type: integer
+          format: int64
+        runDate:
+          type: string
+          format: date
+        classCode:
+          type: string
+        quotaCode:
+          type: string
+        fromSeq:
+          type: integer
+          format: int32
+        toSeq:
+          type: integer
+          format: int32
+        totalFare:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

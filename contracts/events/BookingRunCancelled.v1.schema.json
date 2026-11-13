@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.railops.in/events/BookingRunCancelled.v1.schema.json",
+  "title": "BookingRunCancelled",
+  "description": "Train run cancelled by operations; full refund. Consumers: notification.",
+  "type": "object",
+  "properties": {
+    "pnr": {
+      "type": "string",
+      "pattern": "^[0-9]{10}$"
+    },
+    "trainRunId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "refundAmount": {
+      "type": "number",
+      "minimum": 0
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "pnr",
+    "trainRunId",
+    "refundAmount",
+    "reason"
+  ],
+  "additionalProperties": false
+}

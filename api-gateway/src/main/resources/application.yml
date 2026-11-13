@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 200ms
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # Forwarding headers are set by GatewayApplication.edgeHeaders from a TRUSTED client-IP resolution.
+          # SCG's own filters would append to whatever the client sent.
+          x-forwarded:
+            enabled: false
+          forwarded:
+            enabled: false
+          httpclient:
+            connect-timeout: 1000
+            response-timeout: 10s
+          # 429 bodies and the X-RateLimit-* headers tell well-behaved clients when to come back.
+          filter:
+            request-rate-limiter:
+              deny-empty-key: true
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8090}   # actuator on a separate port that the load balancer never exposes
+  endpoints:
+    web:
+      exposure:
+        # NOT "gateway": that actuator endpoint can create and modify routes (POST /actuator/gateway/routes).
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+railops:
+  edge:
+    # CIDRs of proxies allowed to tell us the client IP via X-Forwarded-For (web tier, cloud LB). Empty = trust
+    # nobody: the TCP peer is the client. GCP external HTTPS LB: 35.191.0.0/16,130.211.0.0/22 (plus the web tier).
+    trusted-proxies: ${RAILOPS_EDGE_TRUSTED_PROXIES:}
+    # Single header the platform's own edge sets to the real client IP, believed only from a trusted proxy.
+    # Render: True-Client-IP (set by Cloudflare). Empty = walk X-Forwarded-For only.
+    client-ip-header: ${RAILOPS_EDGE_CLIENT_IP_HEADER:}
+    # Phase 4D: shared with RailLens' website server (its RAILOPS_PROXY_SECRET). Lets it name the visitor's IP in
+    # X-RailOps-Client-IP so login rate limits stay per visitor. Empty = off. At least 32 characters.
+    proxy-secret: ${RAILOPS_EDGE_PROXY_SECRET:}
+    # Exact origins allowed to call /api/** from a browser (the RailLens website). Empty = none.
+    cors-allowed-origins: ${RAILOPS_EDGE_CORS_ALLOWED_ORIGINS:}
+  routes:
+    identity: ${IDENTITY_URL:http://identity-service:8080}
+    reservation: ${RESERVATION_URL:http://reservation-service:8080}
+    payment: ${PAYMENT_URL:http://payment-service:8080}
+  security:
+    jwk-set-uri: ${JWK_SET_URI:http://identity-service:8080/.well-known/jwks.json}

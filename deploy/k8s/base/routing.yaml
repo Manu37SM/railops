@@ -1,0 +1,69 @@
+# Public entry: GKE Gateway API, global external Application Load Balancer, Google-managed certificate.
+# Browsers -> web (nginx serves the SPA, proxies /api to the gateway). API clients -> api.<domain> -> api-gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: railops
+  annotations:
+    networking.gke.io/certmap: railops-certmap      # Certificate Manager map with the managed certs
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  listeners:
+    - {name: https, protocol: HTTPS, port: 443}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: web}
+spec:
+  parentRefs: [{name: railops}]
+  hostnames: ["railops.example.in"]
+  rules:
+    - backendRefs: [{name: web, port: 8080}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: api}
+spec:
+  parentRefs: [{name: railops}]
+  hostnames: ["api.railops.example.in"]
+  rules:
+    - backendRefs: [{name: api-gateway, port: 8080}]
+---
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata: {name: api-gateway}
+spec:
+  default:
+    config:
+      type: HTTP
+      httpHealthCheck: {port: 8090, requestPath: /actuator/health/readiness}
+  targetRef: {group: "", kind: Service, name: api-gateway}
+---
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata: {name: web}
+spec:
+  default:
+    config:
+      type: HTTP
+      httpHealthCheck: {port: 8080, requestPath: /healthz}
+  targetRef: {group: "", kind: Service, name: web}
+---
+# Cloud Armor (WAF + per-IP rate limiting at Google's edge, before traffic reaches the cluster).
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata: {name: web}
+spec:
+  default:
+    securityPolicy: railops-edge-armor
+    timeoutSec: 30
+  targetRef: {group: "", kind: Service, name: web}
+---
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata: {name: api-gateway}
+spec:
+  default:
+    securityPolicy: railops-edge-armor
+    timeoutSec: 30
+  targetRef: {group: "", kind: Service, name: api-gateway}

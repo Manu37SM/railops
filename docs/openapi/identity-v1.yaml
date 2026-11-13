@@ -1,0 +1,605 @@
+openapi: 3.1.0
+info:
+  title: OpenAPI definition
+  version: v0
+servers:
+- url: http://localhost:8082
+  description: Generated server url
+paths:
+  /oauth2/token:
+    post:
+      tags:
+      - service-token-controller
+      summary: OAuth2 client_credentials token for services
+      description: HTTP Basic client authentication. Tokens have audience railops-internal
+        and live 5 minutes.
+      operationId: token
+      parameters:
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                grant_type:
+                  type: string
+                scope:
+                  type: string
+              required:
+              - grant_type
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties: {}
+  /api/v1/auth/register:
+    post:
+      tags:
+      - auth-controller
+      summary: Register a passenger account
+      description: 409 ACCOUNT_EXISTS if the email or phone is taken; 422 WEAK_PASSWORD.
+      operationId: register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+                  format: uuid
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - auth-controller
+      summary: Rotate the refresh cookie and get a new access token
+      description: "Requires X-Requested-With: railops-web. Replaying a rotated token\
+        \ after 5 s revokes the whole session family."
+      operationId: refresh
+      parameters:
+      - name: rt
+        in: cookie
+        required: false
+        schema:
+          type: string
+      - name: X-Requested-With
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+  /api/v1/auth/mfa/enrol:
+    post:
+      tags:
+      - auth-controller
+      summary: Start TOTP enrolment
+      description: Enrolment token only. Returns the secret and otpauth URI once.
+      operationId: beginEnrolment
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Enrolment"
+  /api/v1/auth/mfa/confirm:
+    post:
+      tags:
+      - auth-controller
+      summary: Confirm TOTP enrolment with a valid code
+      description: Activates the account.
+      operationId: confirmEnrolment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CodeRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+  /api/v1/admin/raillens/account-move:
+    post:
+      tags:
+      - Admin
+      summary: Move RailLens accounts into this login
+      description: "ADMIN + MFA (single login, Phase 4C). Reads RailLens' accounts that aren't linked yet, using\
+        \ your own token (RailLens must accept RailOps tokens), creates each here with the same email and bcrypt\
+        \ password hash, and sends RailLens the new ids. Safe to repeat. Emails that already have an account here\
+        \ are reported (masked), never merged. RailLens admins are listed, not granted roles. Every account created\
+        \ is audited."
+      operationId: moveRailLensAccounts
+      responses:
+        "200":
+          description: What happened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountMoveSummary"
+        "502":
+          description: "RAILLENS_REFUSED (RailLens didn't accept the admin token) or RAILLENS_UNAVAILABLE"
+      security:
+      - bearer: []
+  /api/v1/auth/app/login:
+    post:
+      tags:
+      - Auth (apps)
+      summary: Log in (app)
+      description: "For the RailLens Android app and the RailLens website's server (Phase 4A). Same accounts,\
+        \ lockout and MFA as /api/v1/auth/login, but both tokens come back in the body and no cookie is set.\
+        \ Returns MFA_ENROLMENT_REQUIRED with a 5-minute enrolment token for staff without MFA. All failures\
+        \ are an identical 401. Rate-limited per IP at the gateway like /login."
+      operationId: appLogin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+        required: true
+      responses:
+        "200":
+          description: Session (or MFA_ENROLMENT_REQUIRED)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSession"
+        "401":
+          description: Wrong credentials, locked, or one-time code missing/wrong
+  /api/v1/auth/app/refresh:
+    post:
+      tags:
+      - Auth (apps)
+      summary: Rotate the refresh token (app)
+      description: The old refresh token stops working. Replaying a rotated token after 5 s revokes the whole
+        session family.
+      operationId: appRefresh
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppRefreshRequest"
+        required: true
+      responses:
+        "200":
+          description: New session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSession"
+        "401":
+          description: Unknown, expired or revoked refresh token
+  /api/v1/auth/app/logout:
+    post:
+      tags:
+      - Auth (apps)
+      summary: Log out (app)
+      description: Revokes the session family of this refresh token. Always 204.
+      operationId: appLogout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppRefreshRequest"
+        required: true
+      responses:
+        "204":
+          description: Logged out
+  /api/v1/auth/password:
+    post:
+      tags:
+      - Account
+      summary: Change my password
+      description: "Phase 4D. User access token plus the current password. A wrong current password counts toward the login lockout. Revokes every session, including this one: sign in again afterwards."
+      operationId: changePassword
+      security:
+      - bearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+        required: true
+      responses:
+        "204":
+          description: Password changed; all sessions revoked
+        "401":
+          description: AUTH_FAILED (wrong current password, or locked)
+        "422":
+          description: WEAK_PASSWORD or PASSWORD_REUSED
+  /api/v1/auth/erase:
+    post:
+      tags:
+      - Account
+      summary: Close my passenger account
+      description: "Phase 4D. Erases email, phone, MFA secret, roles and sessions. Bookings and payments keep the user id as financial records. The email can be registered again afterwards."
+      operationId: eraseAccount
+      security:
+      - bearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EraseRequest"
+        required: true
+      responses:
+        "204":
+          description: Account closed
+        "401":
+          description: AUTH_FAILED (wrong password, or locked)
+        "403":
+          description: ERASE_NOT_ALLOWED (staff accounts are closed by an admin)
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - auth-controller
+      summary: Revoke the session family and clear the cookie
+      description: "Requires X-Requested-With: railops-web."
+      operationId: logout
+      parameters:
+      - name: rt
+        in: cookie
+        required: false
+        schema:
+          type: string
+      - name: X-Requested-With
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+  /api/v1/auth/login:
+    post:
+      tags:
+      - auth-controller
+      summary: Log in
+      description: "Returns an access token and sets the HttpOnly refresh cookie,\
+        \ or MFA_ENROLMENT_REQUIRED with a 5-minute enrolment token. Staff must send\
+        \ otp. All failures are an identical 401."
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+  /api/v1/admin/users/{userId}/grants:
+    post:
+      tags:
+      - admin-controller
+      summary: Grant a scoped role
+      description: "ADMIN + MFA. No self-grants; ADMIN/AUDITOR/REVENUE_ANALYST are\
+        \ GLOBAL-only, others must be scoped."
+      operationId: grant
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrantRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+  /api/v1/admin/staff:
+    post:
+      tags:
+      - admin-controller
+      summary: Create a staff account (PENDING_MFA) with a one-time password
+      description: ADMIN + MFA. The password is returned once; hand it over out of
+        band.
+      operationId: createStaff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CreatedStaff"
+  /api/v1/admin/audit/verify:
+    get:
+      tags:
+      - admin-controller
+      summary: Verify the audit hash chain
+      description: ADMIN or AUDITOR + MFA. Returns the first broken entry id if tampering
+        is detected.
+      operationId: verifyAudit
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VerifyResult"
+  /api/v1/admin/audit/verify-anchors:
+    post:
+      tags:
+      - admin-controller
+      summary: Verify the audit log against published anchors
+      description: "ADMIN or AUDITOR + MFA. Body: (id, hash) anchors exported from WORM storage (the locked\
+        \ Cloud Logging bucket). Detects a rewrite that recomputes the whole chain, and deleted anchored rows,\
+        \ which /audit/verify alone cannot."
+      operationId: verifyAnchors
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 100000
+              items:
+                $ref: "#/components/schemas/AuditAnchor"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnchorVerifyResult"
+        "400":
+          description: An anchor hash is not 64 lowercase hex characters
+  /.well-known/jwks.json:
+    get:
+      tags:
+      - jwks-controller
+      summary: Public signing keys (JWKS)
+      description: Includes the previous key during rotation. Cacheable for 5 minutes.
+      operationId: jwks
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties: {}
+  /api/v1/admin/grants/{grantId}:
+    delete:
+      tags:
+      - admin-controller
+      summary: Revoke a grant and the user's refresh tokens
+      description: Existing access tokens expire within 10 minutes.
+      operationId: revoke
+      parameters:
+      - name: grantId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK
+components:
+  schemas:
+    AccountMoveSummary:
+      type: object
+      properties:
+        examined: {type: integer}
+        created: {type: integer}
+        alreadyMoved: {type: integer}
+        linkedInRailLens: {type: integer}
+        emailTaken: {type: integer}
+        emailTakenSample:
+          type: array
+          description: "Up to 50 entries: RailLens id and masked email"
+          items: {type: string}
+        invalid:
+          type: array
+          items: {type: integer, format: int64}
+        raillensAdmins:
+          type: array
+          items: {type: integer, format: int64}
+        linkConflicts:
+          type: array
+          items: {type: integer, format: int64}
+    AppSession:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: "RS256 JWT, 10 minutes. Claims include sub, utyp, roles, grants, amr and (Phase 4A) email."
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          format: int64
+        refreshToken:
+          type: string
+          description: Store securely (Keychain / HttpOnly cookie on your own server). Rotates on every refresh.
+        refreshExpiresIn:
+          type: integer
+          format: int64
+    ChangePasswordRequest:
+      required:
+      - currentPassword
+      - newPassword
+      type: object
+      properties:
+        currentPassword:
+          maxLength: 128
+          type: string
+        newPassword:
+          maxLength: 128
+          type: string
+    EraseRequest:
+      required:
+      - password
+      type: object
+      properties:
+        password:
+          maxLength: 128
+          type: string
+    AppRefreshRequest:
+      required:
+      - refreshToken
+      type: object
+      properties:
+        refreshToken:
+          maxLength: 200
+          type: string
+    AuditAnchor:
+      type: object
+      required: [id, hash]
+      properties:
+        id: {type: integer, format: int64}
+        hash: {type: string, pattern: "^[0-9a-f]{64}$"}
+    AnchorVerifyResult:
+      type: object
+      properties:
+        intact: {type: boolean, description: "chain consistent AND every anchor matches AND none missing"}
+        chain: {$ref: "#/components/schemas/VerifyResult"}
+        anchorsChecked: {type: integer}
+        mismatchedAnchorIds: {type: array, items: {type: integer, format: int64}}
+        missingAnchorIds: {type: array, items: {type: integer, format: int64}}
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          minLength: 0
+        password:
+          type: string
+          maxLength: 128
+          minLength: 0
+        phone:
+          type: string
+          minLength: 1
+          pattern: "^\\+?[0-9 -]{10,16}$"
+      required:
+      - email
+      - password
+      - phone
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+        expiresIn:
+          type: integer
+          format: int64
+    Enrolment:
+      type: object
+      properties:
+        secretBase32:
+          type: string
+        otpauthUri:
+          type: string
+    CodeRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          pattern: "\\d{6}"
+      required:
+      - code
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          minLength: 0
+        password:
+          type: string
+          maxLength: 128
+          minLength: 0
+        otp:
+          type: string
+          pattern: "\\d{6}"
+      required:
+      - email
+      - password
+    GrantRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          minLength: 1
+        scopeType:
+          type: string
+          enum:
+          - GLOBAL
+          - ZONE
+          - DIVISION
+          - STATION
+        scopeValue:
+          type: string
+      required:
+      - role
+      - scopeType
+    CreateStaffRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+    CreatedStaff:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        oneTimePassword:
+          type: string
+    VerifyResult:
+      type: object
+      properties:
+        intact:
+          type: boolean
+        entriesChecked:
+          type: integer
+          format: int64
+        firstBrokenId:
+          type: integer
+          format: int64
