@@ -7,6 +7,8 @@ ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-21-noble@sha256:99e61abcff91a9b1333463
 ARG RUNTIME_IMAGE=eclipse-temurin:21-jre-noble@sha256:0d57a8e90c2bb844c5a8e1b2b71e11eff06dad7edcfd803cd21ed4ae203b2515
 
 # ---------------------------------------------------------------------------------------------------------- build
+# The image is pinned by tag AND sha256 digest in the ARG above; hadolint cannot see through ${...}.
+# hadolint ignore=DL3006
 FROM ${MAVEN_IMAGE} AS build
 ARG SERVICE
 WORKDIR /src
@@ -27,6 +29,8 @@ RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp -q -pl ${SERVICE} -am packag
  && java -Djarmode=tools -jar ${SERVICE}/target/${SERVICE}-*.jar extract --layers --launcher --destination /layers
 
 # -------------------------------------------------------------------------------------------------------- runtime
+# The image is pinned by tag AND sha256 digest in the ARG above; hadolint cannot see through ${...}.
+# hadolint ignore=DL3006
 FROM ${RUNTIME_IMAGE}
 ARG SERVICE
 LABEL org.opencontainers.image.title="railops-${SERVICE}" \
