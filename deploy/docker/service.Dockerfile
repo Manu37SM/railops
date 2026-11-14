@@ -71,4 +71,4 @@ USER 10001:10001
 EXPOSE 8080
 # Compose only; Kubernetes uses httpGet probes on /actuator/health/{liveness,readiness}.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=3 CMD ["/opt/app/healthcheck.sh"]
-ENTRYPOINT ["java", "-XX:AOTCache=app.aot", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
