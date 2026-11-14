@@ -1,8 +1,8 @@
 package in.railops.common.messaging;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import in.railops.testsupport.ItPostgres;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -37,7 +37,7 @@ class OutboxRelayIT {
     static HikariDataSource ds;
     static JdbcClient jdbc;
     static TransactionTemplate tx;
-    static final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    static final ObjectMapper mapper = new JsonMapper();
 
     @BeforeAll
     static void infra() {
@@ -149,7 +149,7 @@ class OutboxRelayIT {
             int seq = env.path("payload").path("seq").asInt();
             Integer prev = lastSeq.put(r.key(), seq);
             if (prev != null) assertThat(seq).as("order for " + r.key()).isGreaterThan(prev);
-            assertThat(env.path("eventType").asText()).isEqualTo("Ping");
+            assertThat(env.path("eventType").asString()).isEqualTo("Ping");
         }
     }
 

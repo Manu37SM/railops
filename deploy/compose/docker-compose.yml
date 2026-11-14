@@ -35,7 +35,7 @@ x-migrate: &migrate
   cap_drop: [ALL]
   networks: [backend]
   healthcheck: {disable: true}
-  entrypoint: ["java", "-cp", "/opt/app/BOOT-INF/classes:/opt/app/BOOT-INF/lib/*", "in.railops.common.db.Migrate"]
+  entrypoint: ["java", "-cp", "/opt/app/app.jar:/opt/app/lib/*", "in.railops.common.db.Migrate"]
   depends_on:
     postgres: {condition: service_healthy}
 
@@ -143,7 +143,7 @@ services:
       <<: *java-deps
       identity-migrate: {condition: service_completed_successfully}
     environment:
-      RAILOPS_RAILLENS_BASE_URL: ${RAILLENS_API_URL:-https://raillens-train-db.onrender.com/api/v1}
+      RAILOPS_RAILLENS_BASE_URL: ${RAILLENS_API_URL:-https://raillens-api.onrender.com/api/v1}
       <<: *java-env
       DB_USER: identity_app
       ALLOWED_ORIGINS: http://localhost:8088
@@ -186,7 +186,7 @@ services:
       DB_POOL_SIZE: "30"
       PAYMENT_URL: http://payment-service:8080
       # Timetables for "Open a train for booking" (Phase 3B). A RailLens backend on your machine: http://host.docker.internal:8080/api/v1
-      RAILOPS_RAILLENS_BASE_URL: ${RAILLENS_API_URL:-https://raillens-train-db.onrender.com/api/v1}
+      RAILOPS_RAILLENS_BASE_URL: ${RAILLENS_API_URL:-https://raillens-api.onrender.com/api/v1}
     secrets:
       - {source: reservation_app_db_password, target: spring.datasource.password}
       - {source: redis_password, target: spring.data.redis.password}

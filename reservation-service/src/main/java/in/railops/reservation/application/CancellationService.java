@@ -1,7 +1,6 @@
 package in.railops.reservation.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.common.messaging.OutboxWriter;
 import in.railops.reservation.adapter.out.persistence.AllocationRepository;
 import in.railops.reservation.adapter.out.persistence.AllocationRepository.Released;
@@ -26,6 +25,7 @@ import in.railops.reservation.domain.policy.PnrGenerator;
 import in.railops.reservation.domain.policy.RefundPolicy;
 import in.railops.reservation.domain.policy.RefundPolicy.PassengerRefund;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -243,7 +243,7 @@ public class CancellationService {
             cancellations.insert(new NewCancellation(id, b.runDate(), b.id(), b.pnr(), v.cancelled(), kind,
                     v.totalPaid(), v.totalCharge(), v.refundAmount(), mapper.writeValueAsString(v.breakdown()),
                     userId.toString()));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(e);
         }
     }

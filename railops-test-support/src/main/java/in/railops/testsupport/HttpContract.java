@@ -1,7 +1,8 @@
 package in.railops.testsupport;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
@@ -22,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class HttpContract {
 
-    private static final ObjectMapper M = new ObjectMapper();
+    private static final ObjectMapper M = new JsonMapper();
 
     public final JsonNode json;
 
@@ -86,22 +87,22 @@ public final class HttpContract {
             if (!actual.isObject()) {
                 throw new AssertionError(at + ": expected object, got " + actual.getNodeType());
             }
-            Iterator<String> names = expected.fieldNames();
+            Iterator<String> names = expected.propertyNames().iterator();
             while (names.hasNext()) {
                 String f = names.next();
                 if (!actual.has(f)) {
-                    throw new AssertionError(at + "." + f + ": missing (got fields " + iter(actual.fieldNames()) + ")");
+                    throw new AssertionError(at + "." + f + ": missing (got fields " + iter(actual.propertyNames().iterator()) + ")");
                 }
                 assertSameShape(expected.get(f), actual.get(f), at + "." + f);
             }
-            Iterator<String> extra = actual.fieldNames();
+            Iterator<String> extra = actual.propertyNames().iterator();
             while (extra.hasNext()) {
                 String f = extra.next();
                 if (!expected.has(f)) {
                     throw new AssertionError(at + "." + f + ": not in the contract");
                 }
             }
-        } else if (expected.isNumber() != actual.isNumber() || expected.isTextual() != actual.isTextual()
+        } else if (expected.isNumber() != actual.isNumber() || expected.isString() != actual.isString()
                 || expected.isBoolean() != actual.isBoolean()) {
             throw new AssertionError(at + ": expected " + expected.getNodeType() + ", got " + actual.getNodeType());
         }

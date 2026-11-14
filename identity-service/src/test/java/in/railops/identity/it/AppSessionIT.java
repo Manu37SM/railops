@@ -1,10 +1,10 @@
 package in.railops.identity.it;
-
+import tools.jackson.databind.json.JsonMapper;
 import in.railops.identity.service.AuthService;
 import in.railops.testsupport.ItPostgres;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -13,8 +13,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -44,7 +44,7 @@ class AppSessionIT {
 
     @Autowired MockMvc mvc;
     @Autowired AuthService auth;
-    final ObjectMapper json = new ObjectMapper();
+    final ObjectMapper json = new JsonMapper();
 
     String newPassenger() {
         String email = "app." + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
@@ -61,7 +61,7 @@ class AppSessionIT {
     }
 
     static JsonNode claims(String jwt) throws Exception {
-        return new ObjectMapper().readTree(new String(Base64.getUrlDecoder().decode(jwt.split("\\.")[1]), StandardCharsets.UTF_8));
+        return new JsonMapper().readTree(new String(Base64.getUrlDecoder().decode(jwt.split("\\.")[1]), StandardCharsets.UTF_8));
     }
 
     @Test
@@ -70,22 +70,22 @@ class AppSessionIT {
         var r = postJson("/api/v1/auth/app/login", "{\"email\":\"%s\",\"password\":\"central-railway-123\"}".formatted(email));
         assertThat(r.getStatus()).as(r.getContentAsString()).isEqualTo(200);
         JsonNode b = body(r);
-        assertThat(b.get("accessToken").asText()).isNotBlank();
-        assertThat(b.get("refreshToken").asText()).isNotBlank();
+        assertThat(b.get("accessToken").asString()).isNotBlank();
+        assertThat(b.get("refreshToken").asString()).isNotBlank();
         assertThat(b.get("refreshExpiresIn").asLong()).isEqualTo(14L * 24 * 3600);
         assertThat(r.getHeader("Set-Cookie")).isNull();
         assertThat(r.getHeader("Cache-Control")).contains("no-store");
-        assertThat(claims(b.get("accessToken").asText()).get("email").asText()).isEqualTo(email);
+        assertThat(claims(b.get("accessToken").asString()).get("email").asString()).isEqualTo(email);
     }
 
     @Test
     void refresh_rotates_and_the_old_token_stops_working() throws Exception {
         String email = newPassenger();
         String rt1 = body(postJson("/api/v1/auth/app/login", "{\"email\":\"%s\",\"password\":\"central-railway-123\"}".formatted(email)))
-                .get("refreshToken").asText();
+                .get("refreshToken").asString();
         var r2 = postJson("/api/v1/auth/app/refresh", "{\"refreshToken\":\"%s\"}".formatted(rt1));
         assertThat(r2.getStatus()).isEqualTo(200);
-        String rt2 = body(r2).get("refreshToken").asText();
+        String rt2 = body(r2).get("refreshToken").asString();
         assertThat(rt2).isNotEqualTo(rt1);
         assertThat(postJson("/api/v1/auth/app/refresh", "{\"refreshToken\":\"%s\"}".formatted(rt2)).getStatus()).isEqualTo(200);
     }
@@ -94,7 +94,7 @@ class AppSessionIT {
     void logout_ends_the_session() throws Exception {
         String email = newPassenger();
         String rt = body(postJson("/api/v1/auth/app/login", "{\"email\":\"%s\",\"password\":\"central-railway-123\"}".formatted(email)))
-                .get("refreshToken").asText();
+                .get("refreshToken").asString();
         assertThat(postJson("/api/v1/auth/app/logout", "{\"refreshToken\":\"%s\"}".formatted(rt)).getStatus()).isEqualTo(204);
         assertThat(postJson("/api/v1/auth/app/refresh", "{\"refreshToken\":\"%s\"}".formatted(rt)).getStatus()).isEqualTo(401);
     }

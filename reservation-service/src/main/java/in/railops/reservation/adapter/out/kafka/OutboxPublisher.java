@@ -1,6 +1,6 @@
 package in.railops.reservation.adapter.out.kafka;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.common.messaging.OutboxRelay;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;

@@ -1,7 +1,8 @@
 package in.railops.payment.gateway;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -29,7 +30,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class RazorpayGatewayTest {
 
     static final String SECRET = "whsec-test-0123456789abcdef";
-    final ObjectMapper json = new ObjectMapper();
+    final ObjectMapper json = new JsonMapper();
     MockRestServiceServer server;
     RazorpayGateway gw;
 
@@ -144,18 +145,18 @@ class RazorpayGatewayTest {
                  "payment_link":{"entity":{"id":"plink_P1","amount_paid":84550,"currency":"INR","status":"paid"}},
                  "payment":{"entity":{"id":"pay_OK","amount":84550,"currency":"INR","status":"captured"}}}}""".getBytes();
         JsonNode n = json.readTree(gw.normalize("evt_1", paid));
-        assertThat(n.path("id").asText()).isEqualTo("rzp:evt_1");
-        assertThat(n.path("type").asText()).isEqualTo("payment.captured");
-        assertThat(n.path("data").path("orderId").asText()).isEqualTo("plink_P1");
-        assertThat(n.path("data").path("paymentId").asText()).isEqualTo("pay_OK");
-        assertThat(n.path("data").path("amount").asText()).isEqualTo("845.50");
+        assertThat(n.path("id").asString()).isEqualTo("rzp:evt_1");
+        assertThat(n.path("type").asString()).isEqualTo("payment.captured");
+        assertThat(n.path("data").path("orderId").asString()).isEqualTo("plink_P1");
+        assertThat(n.path("data").path("paymentId").asString()).isEqualTo("pay_OK");
+        assertThat(n.path("data").path("amount").asString()).isEqualTo("845.50");
 
         JsonNode exp = json.readTree(gw.normalize("evt_2", "{\"event\":\"payment_link.expired\",\"payload\":{\"payment_link\":{\"entity\":{\"id\":\"plink_P2\"}}}}".getBytes()));
-        assertThat(exp.path("type").asText()).isEqualTo("payment.failed");
+        assertThat(exp.path("type").asString()).isEqualTo("payment.failed");
         JsonNode rf = json.readTree(gw.normalize("evt_3", "{\"event\":\"refund.processed\",\"payload\":{\"refund\":{\"entity\":{\"id\":\"rfnd_New\"}}}}".getBytes()));
-        assertThat(rf.path("data").path("refundId").asText()).isEqualTo("rfnd_New");
+        assertThat(rf.path("data").path("refundId").asString()).isEqualTo("rfnd_New");
         JsonNode other = json.readTree(gw.normalize(null, "{\"event\":\"payment.failed\",\"payload\":{}}".getBytes()));
-        assertThat(other.path("type").asText()).startsWith("ignored.");
-        assertThat(other.path("id").asText()).startsWith("rzp:sha256:");
+        assertThat(other.path("type").asString()).startsWith("ignored.");
+        assertThat(other.path("id").asString()).startsWith("rzp:sha256:");
     }
 }

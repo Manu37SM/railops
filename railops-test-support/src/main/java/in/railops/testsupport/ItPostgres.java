@@ -1,6 +1,6 @@
 package in.railops.testsupport;
 
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -28,7 +28,7 @@ public final class ItPostgres {
     public record Db(String url, String user, String password) {
     }
 
-    private static PostgreSQLContainer<?> container;
+    private static PostgreSQLContainer container;
 
     private ItPostgres() {
     }
@@ -44,7 +44,7 @@ public final class ItPostgres {
             password = param(admin, "password");
         } else {
             if (container == null) {
-                container = new PostgreSQLContainer<>("postgres:16-alpine").withUsername("railops").withPassword("railops");
+                container = new PostgreSQLContainer("postgres:16-alpine").withUsername("railops").withPassword("railops");
                 container.start();
             }
             adminUrl = container.getJdbcUrl();

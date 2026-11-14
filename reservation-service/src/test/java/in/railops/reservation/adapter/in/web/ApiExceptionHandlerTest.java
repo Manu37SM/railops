@@ -30,7 +30,7 @@ class ApiExceptionHandlerTest {
 
     @Test
     void springMvcRejectionsKeepTheirOwnStatus() {
-        assertThat(handler.unexpected(new NoResourceFoundException(HttpMethod.GET, "actuator/prometheus"))
+        assertThat(handler.unexpected(new NoResourceFoundException(HttpMethod.GET, "actuator/prometheus", "No static resource actuator/prometheus."))
                 .getStatus()).isEqualTo(404);
         assertThat(handler.unexpected(new HttpRequestMethodNotSupportedException("PUT", List.of("POST"))).getStatus())
                 .isEqualTo(405);

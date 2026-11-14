@@ -8,6 +8,7 @@ import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.ExponentialBackOff;
+import tools.jackson.core.JacksonException;
 
 import java.time.Duration;
 
@@ -50,7 +51,7 @@ public final class DeadLetters {
         var backoff = new ExponentialBackOff(initial.toMillis(), 2.0);
         backoff.setMaxElapsedTime(maxElapsed.toMillis());
         var handler = new DefaultErrorHandler(counted, backoff);
-        handler.addNotRetryableExceptions(com.fasterxml.jackson.core.JsonProcessingException.class,
+        handler.addNotRetryableExceptions(JacksonException.class,
                 IllegalArgumentException.class);
         return handler;
     }

@@ -117,7 +117,7 @@ print_service() {
       kv BOOTSTRAP_ADMIN_EMAIL "$BOOTSTRAP_ADMIN_EMAIL"
       kv BOOTSTRAP_ADMIN_PASSWORD "$(secret bootstrap_admin_password)"
       # Moving RailLens accounts into this login (Phase 4C).
-      kv RAILOPS_RAILLENS_BASE_URL "${RAILLENS_API_URL:-https://raillens-train-db.onrender.com/api/v1}"
+      kv RAILOPS_RAILLENS_BASE_URL "${RAILLENS_API_URL:-https://raillens-api.onrender.com/api/v1}"
       echo "# ALSO: add a Secret File named railops.jwt.private-key-pem with the contents of deploy/secrets/jwt_private_key.pem" ;;
     reservation)
       require PAYMENT_URL REDIS_HOST
@@ -129,7 +129,7 @@ print_service() {
       kv RAILOPS_PAYMENTS_SIMULATED "$([ "${PAYMENT_GATEWAY:-sim}" = razorpay ] && echo false || echo true)"
       kv PAYMENT_URL "$PAYMENT_URL"
       # Staff import train runs from RailLens timetables (Phase 3B).
-      kv RAILOPS_RAILLENS_BASE_URL "${RAILLENS_API_URL:-https://raillens-train-db.onrender.com/api/v1}"
+      kv RAILOPS_RAILLENS_BASE_URL "${RAILLENS_API_URL:-https://raillens-api.onrender.com/api/v1}"
       redis
       kv CONTACT_ENC_KEY "$(secret contact_enc_key)"
       kv CONTACT_HMAC_KEY "$(secret contact_hmac_key)" ;;

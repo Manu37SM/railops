@@ -26,7 +26,7 @@ class ContactHttpConsumerContractTest {
 
             assertThat(notifier.contactPhone("2400000018")).contains("9820012345");
             assertThat(rec.method).isEqualTo("GET");
-            assertThat(rec.path).isEqualTo(c.request().get("path").asText());
+            assertThat(rec.path).isEqualTo(c.request().get("path").asString());
             assertThat(rec.headers.get("authorization")).isEqualTo("Bearer svc-token");
         } finally {
             server.stop(0);

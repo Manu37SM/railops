@@ -1,6 +1,6 @@
 package in.railops.reservation.contracts;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.reservation.contracts.PaymentEvents.PaymentCaptured;
 import in.railops.reservation.contracts.ReservationEvents.*;
 import in.railops.testsupport.EventContracts;

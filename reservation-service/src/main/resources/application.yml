@@ -70,10 +70,11 @@ spring:
         size: 4
   jackson:
     default-property-inclusion: non_null
-    serialization:
-      write-dates-as-timestamps: false
     deserialization:
-      fail-on-unknown-properties: false   # tolerant reader for events and stored responses
+      fail-on-unknown-properties: false
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false   # tolerant reader for events and stored responses
 
 server:
   shutdown: graceful

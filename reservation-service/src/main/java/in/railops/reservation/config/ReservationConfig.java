@@ -1,6 +1,6 @@
 package in.railops.reservation.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.common.messaging.OutboxWriter;
 import in.railops.common.messaging.ProcessedEvents;
 import in.railops.common.web.CorrelationIdFilter;

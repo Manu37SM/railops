@@ -1,7 +1,7 @@
 package in.railops.payment.gateway;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
@@ -116,8 +116,8 @@ public class RazorpayGateway implements GatewayPort {
         }
         JsonNode link = http.post().uri("/payment_links").contentType(MediaType.APPLICATION_JSON).body(body)
                 .retrieve().body(JsonNode.class);
-        String id = link == null ? "" : link.path("id").asText();
-        String url = link == null ? "" : link.path("short_url").asText();
+        String id = link == null ? "" : link.path("id").asString();
+        String url = link == null ? "" : link.path("short_url").asString();
         if (!id.startsWith("plink_") || !url.startsWith("https://")) {
             throw new IllegalStateException("Razorpay returned an unexpected payment link");
         }
@@ -129,21 +129,21 @@ public class RazorpayGateway implements GatewayPort {
 
     @Override
     public String checkoutUrl(String orderId) {
-        return fetchLink(orderId).path("short_url").asText();
+        return fetchLink(orderId).path("short_url").asString();
     }
 
     @Override
     public OrderStatus fetchOrder(String orderId) {
         JsonNode link = fetchLink(orderId);
-        String status = link.path("status").asText();
+        String status = link.path("status").asString();
         JsonNode captured = null;
         for (JsonNode p : link.path("payments")) {
-            if ("captured".equals(p.path("status").asText())) {
+            if ("captured".equals(p.path("status").asString())) {
                 captured = p;
             }
         }
         if ("paid".equals(status) && captured != null) {
-            return new OrderStatus(orderId, "captured", rupees(link.path("amount_paid").asLong()), captured.path("payment_id").asText());
+            return new OrderStatus(orderId, "captured", rupees(link.path("amount_paid").asLong()), captured.path("payment_id").asString());
         }
         if ("expired".equals(status) || "cancelled".equals(status)) {
             return new OrderStatus(orderId, "failed", BigDecimal.ZERO, null);
@@ -161,8 +161,8 @@ public class RazorpayGateway implements GatewayPort {
         JsonNode existing = http.get().uri("/payments/{id}/refunds", paymentId).retrieve().body(JsonNode.class);
         if (existing != null) {
             for (JsonNode r : existing.path("items")) {
-                if (refundId.toString().equals(r.path("receipt").asText())) {
-                    return new RefundAck(r.path("id").asText());   // a retry: the first attempt did reach Razorpay
+                if (refundId.toString().equals(r.path("receipt").asString())) {
+                    return new RefundAck(r.path("id").asString());   // a retry: the first attempt did reach Razorpay
                 }
             }
         }
@@ -170,7 +170,7 @@ public class RazorpayGateway implements GatewayPort {
                 .body(Map.of("amount", paise(amount), "speed", "normal", "receipt", refundId.toString(),
                         "notes", Map.of("refund_id", refundId.toString())))
                 .retrieve().body(JsonNode.class);
-        String id = r == null ? "" : r.path("id").asText();
+        String id = r == null ? "" : r.path("id").asString();
         if (!id.startsWith("rfnd_")) {
             throw new IllegalStateException("Razorpay returned an unexpected refund");
         }
@@ -182,7 +182,7 @@ public class RazorpayGateway implements GatewayPort {
             throw new IllegalArgumentException("not a Razorpay payment link id");
         }
         JsonNode link = http.get().uri("/payment_links/{id}", orderId).retrieve().body(JsonNode.class);
-        if (link == null || !orderId.equals(link.path("id").asText())) {
+        if (link == null || !orderId.equals(link.path("id").asString())) {
             throw new IllegalStateException("Razorpay returned a different payment link");
         }
         return link;
@@ -211,7 +211,7 @@ public class RazorpayGateway implements GatewayPort {
      */
     public byte[] normalize(String eventIdHeader, byte[] rawBody) throws java.io.IOException {
         JsonNode e = mapper.readTree(rawBody);
-        String event = e.path("event").asText();
+        String event = e.path("event").asString();
         JsonNode payload = e.path("payload");
         String eventId = eventIdHeader != null && !eventIdHeader.isBlank() ? eventIdHeader
                 : "sha256:" + HexFormat.of().formatHex(sha256(rawBody));
@@ -222,18 +222,18 @@ public class RazorpayGateway implements GatewayPort {
                 JsonNode link = payload.path("payment_link").path("entity");
                 JsonNode pay = payload.path("payment").path("entity");
                 type = "payment.captured";
-                data.put("orderId", link.path("id").asText());
-                data.put("paymentId", pay.path("id").asText());
+                data.put("orderId", link.path("id").asString());
+                data.put("paymentId", pay.path("id").asString());
                 data.put("amount", rupees(pay.path("amount").asLong(link.path("amount_paid").asLong())).toPlainString());
-                data.put("currency", pay.path("currency").asText(link.path("currency").asText("INR")));
+                data.put("currency", pay.path("currency").asString(link.path("currency").asString("INR")));
             }
             case "payment_link.expired", "payment_link.cancelled" -> {
                 type = "payment.failed";
-                data.put("orderId", payload.path("payment_link").path("entity").path("id").asText());
+                data.put("orderId", payload.path("payment_link").path("entity").path("id").asString());
             }
             case "refund.processed" -> {
                 type = "refund.processed";
-                data.put("refundId", payload.path("refund").path("entity").path("id").asText());
+                data.put("refundId", payload.path("refund").path("entity").path("id").asString());
             }
             default -> type = "ignored." + (event.isBlank() ? "unknown" : event);
         }

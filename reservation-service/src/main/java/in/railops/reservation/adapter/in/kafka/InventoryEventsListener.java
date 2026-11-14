@@ -1,7 +1,6 @@
 package in.railops.reservation.adapter.in.kafka;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.common.messaging.EventEnvelope;
 import in.railops.reservation.application.PromotionService;
 import in.railops.reservation.contracts.ReservationEvents;
@@ -27,7 +26,7 @@ public class InventoryEventsListener {
     }
 
     @KafkaListener(topics = ReservationEvents.TOPIC_INVENTORY, groupId = "reservation-promotion")
-    public void on(ConsumerRecord<String, String> record) throws JsonProcessingException {
+    public void on(ConsumerRecord<String, String> record) {
         EventEnvelope env = mapper.readValue(record.value(), EventEnvelope.class);
         if (!"InventoryChanged".equals(env.eventType())) {
             return;

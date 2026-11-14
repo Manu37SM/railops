@@ -17,7 +17,7 @@
         <!-- Release train for Spring Boot 3.5 (Spring Cloud Gateway 4.3). -->
         <groupId>org.springframework.cloud</groupId>
         <artifactId>spring-cloud-dependencies</artifactId>
-        <version>2025.0.3</version>
+        <version>2025.1.4</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>

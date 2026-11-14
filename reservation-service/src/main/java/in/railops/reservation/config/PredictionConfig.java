@@ -1,6 +1,6 @@
 package in.railops.reservation.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.reservation.adapter.out.persistence.BookingRepository;
 import in.railops.reservation.adapter.out.persistence.PredictionRepository;
 import in.railops.reservation.application.TransactionRunner;

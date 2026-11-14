@@ -1,10 +1,8 @@
 package in.railops.reservation.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.MapperFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 import in.railops.common.messaging.OutboxWriter;
 import in.railops.reservation.adapter.out.persistence.BookingRepository;
 import in.railops.reservation.adapter.out.persistence.BookingRepository.BookingRow;
@@ -36,6 +34,7 @@ import in.railops.reservation.security.ContactProtector;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 
 import java.math.BigDecimal;
 import java.security.MessageDigest;
@@ -99,7 +98,6 @@ public class BookingService {
         // Canonical form for request hashing: field order must not change the hash.
         this.canonical = JsonMapper.builder()
                 .findAndAddModules()
-                .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
                 .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
                 .build();
     }
@@ -261,7 +259,7 @@ public class BookingService {
         }
         try {
             return mapper.readValue(stored.responseBody(), BookingView.class);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored idempotent response unreadable", e);
         }
     }
@@ -300,7 +298,7 @@ public class BookingService {
     private byte[] sha256(BookingCommand cmd) {
         try {
             return MessageDigest.getInstance("SHA-256").digest(canonical.writeValueAsBytes(cmd));
-        } catch (NoSuchAlgorithmException | JsonProcessingException e) {
+        } catch (NoSuchAlgorithmException | JacksonException e) {
             throw new IllegalStateException(e);
         }
     }
@@ -308,7 +306,7 @@ public class BookingService {
     private String json(Object o) {
         try {
             return mapper.writeValueAsString(o);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(e);
         }
     }

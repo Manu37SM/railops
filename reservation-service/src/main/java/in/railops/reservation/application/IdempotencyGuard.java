@@ -1,13 +1,13 @@
 package in.railops.reservation.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.reservation.adapter.out.persistence.IdempotencyRepository;
 import in.railops.reservation.domain.error.DomainException;
 import in.railops.reservation.domain.error.ErrorCode;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -46,7 +46,7 @@ public class IdempotencyGuard {
         }
         try {
             return Optional.of(mapper.readValue(stored.responseBody(), type));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored idempotent response unreadable", e);
         }
     }
@@ -54,7 +54,7 @@ public class IdempotencyGuard {
     public void complete(UUID userId, String key, int status, Object response) {
         try {
             repo.complete(userId, key, status, mapper.writeValueAsString(response));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(e);
         }
     }
@@ -66,7 +66,7 @@ public class IdempotencyGuard {
             md.update((byte) 0);
             md.update(mapper.writeValueAsBytes(request));
             return md.digest();
-        } catch (NoSuchAlgorithmException | JsonProcessingException e) {
+        } catch (NoSuchAlgorithmException | JacksonException e) {
             throw new IllegalStateException(e);
         }
     }

@@ -2,8 +2,8 @@ package in.railops.payment.service;
 
 import in.railops.payment.contracts.PaymentEvents;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.common.messaging.OutboxWriter;
 import in.railops.common.messaging.Topics;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -63,8 +63,8 @@ public class WebhookService {
     public boolean apply(String gateway, byte[] normalized, byte[] original) throws IOException {
         JsonNode event = mapper.readTree(normalized);
         byte[] rawBody = original;
-        String eventId = event.path("id").asText();
-        String type = event.path("type").asText();
+        String eventId = event.path("id").asString();
+        String type = event.path("type").asString();
         JsonNode data = event.path("data");
         if (eventId.isBlank() || type.isBlank()) {
             throw new IllegalArgumentException("malformed webhook");
@@ -80,10 +80,10 @@ public class WebhookService {
             return false;
         }
         switch (type) {
-            case "payment.captured" -> captured(data.path("orderId").asText(), data.path("paymentId").asText(),
-                    new BigDecimal(data.path("amount").asText("0")), data.path("currency").asText());
-            case "payment.failed" -> failed(data.path("orderId").asText());
-            case "refund.processed" -> refundSettled(data.path("refundId").asText());
+            case "payment.captured" -> captured(data.path("orderId").asString(), data.path("paymentId").asString(),
+                    new BigDecimal(data.path("amount").asString("0")), data.path("currency").asString());
+            case "payment.failed" -> failed(data.path("orderId").asString());
+            case "refund.processed" -> refundSettled(data.path("refundId").asString());
             default -> log.info("ignoring gateway event type {}", type);   // incl. "ignored.*" from adapters
         }
         return true;

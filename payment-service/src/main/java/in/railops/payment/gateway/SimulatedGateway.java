@@ -1,7 +1,6 @@
 package in.railops.payment.gateway;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,6 +8,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import tools.jackson.core.JacksonException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -153,7 +153,7 @@ public class SimulatedGateway implements GatewayPort {
                     .header("X-Sim-Timestamp", Long.toString(ts))
                     .header("X-Sim-Signature", signer.sign(ts, body))
                     .body(body).retrieve().toBodilessEntity();
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(e);
         } catch (RuntimeException e) {
             log.warn("sim-gateway: webhook delivery failed ({}); a real gateway would retry", e.toString());

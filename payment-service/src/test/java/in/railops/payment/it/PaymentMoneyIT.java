@@ -1,6 +1,7 @@
 package in.railops.payment.it;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import in.railops.payment.gateway.GatewayPort;
 import in.railops.payment.gateway.SimulatedGateway;
 import in.railops.payment.gateway.WebhookSignature;
@@ -12,7 +13,7 @@ import in.railops.testsupport.ItPostgres;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -69,7 +70,7 @@ class PaymentMoneyIT {
     @Autowired JdbcClient jdbc;
     @Autowired TransactionTemplate tx;
     @Autowired MockMvc mvc;
-    final ObjectMapper json = new ObjectMapper();
+    final ObjectMapper json = new JsonMapper();
 
     @BeforeEach
     void clean() {

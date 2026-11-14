@@ -118,7 +118,8 @@ per-request errors, and the data doesn't need it.
   agents abuse it.
 * **Money: the local benchmark mutates inventory** (capacities, extra coaches). `reset-local.sh` now restores the
   seeded train. This was the cause of a Phase 9 suite passing only on polluted state; it now provisions explicitly.
-* **Version-dependent:** Spring Cloud 2025.0.3 (Gateway 4.3) with Boot 3.5.x. The property namespace moved to
-  `spring.cloud.gateway.server.webflux.*` in 4.3.
+* **Version-dependent:** measured on Spring Cloud 2025.0.3 (Gateway 4.3) with Boot 3.5.x; since 14 Nov 2026 the
+  code runs Spring Cloud 2025.1.4 (Gateway 5.0) with Boot 4.1. The property namespace
+  `spring.cloud.gateway.server.webflux.*` is the same. Re-measure before relying on these numbers.
 * **Measured on 2 shared cores:** re-run both benchmarks on production-shaped hardware before setting
   `admitPerSecond` or the alert thresholds.

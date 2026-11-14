@@ -1,7 +1,7 @@
 package in.railops.notification;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.common.messaging.EventEnvelope;
 import in.railops.common.messaging.Topics;
 import in.railops.common.security.ServiceTokenClient;
@@ -124,10 +124,10 @@ public class NotificationApplication {
 
         static String req(JsonNode payload, String field) {
             JsonNode v = payload.get(field);
-            if (v == null || v.isNull() || v.isContainerNode() || v.asText().isBlank()) {
+            if (v == null || v.isNull() || v.isContainer() || v.asString().isBlank()) {
                 throw new IllegalArgumentException("payload field '" + field + "' missing or empty");
             }
-            return v.asText();
+            return v.asString();
         }
 
         private final JdbcClient jdbc;
@@ -157,7 +157,7 @@ public class NotificationApplication {
             if (template == null) {
                 return;
             }
-            String pnr = env.payload().path("pnr").asText();
+            String pnr = env.payload().path("pnr").asString();
             if (!pnr.matches("[1-9]\\d{9}")) {
                 throw new IllegalArgumentException("event " + env.eventId() + " has no valid PNR"); // straight to DLT
             }
@@ -220,7 +220,7 @@ public class NotificationApplication {
                         .header("Authorization", "Bearer " + tokens.token())
                         .accept(org.springframework.http.MediaType.APPLICATION_JSON)
                         .retrieve().body(JsonNode.class);
-                return Optional.ofNullable(c).map(n -> n.path("phone").asText(null));
+                return Optional.ofNullable(c).map(n -> n.path("phone").asString(null));
             } catch (HttpClientErrorException.NotFound e) {
                 return Optional.empty();
             } catch (HttpClientErrorException.Unauthorized e) {

@@ -1,8 +1,8 @@
 package in.railops.identity.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 import in.railops.identity.domain.Repositories.AuditEntryRepository;
 import in.railops.testsupport.ItPostgres;
 import org.junit.jupiter.api.Test;

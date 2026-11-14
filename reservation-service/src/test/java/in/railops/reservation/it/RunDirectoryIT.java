@@ -1,13 +1,13 @@
 package in.railops.reservation.it;
-
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class RunDirectoryIT extends AbstractReservationIT {
 
     @Autowired MockMvc mvc;
-    final ObjectMapper json = new ObjectMapper();
+    final ObjectMapper json = new JsonMapper();
 
     MockHttpServletResponse call(String url) throws Exception {
         return mvc.perform(get(url)).andReturn().getResponse();   // no token: must be public
@@ -30,11 +30,11 @@ class RunDirectoryIT extends AbstractReservationIT {
         assertThat(r.getHeader("Cache-Control")).contains("max-age=60").contains("public");
         JsonNode b = json.readTree(r.getContentAsString());
         assertThat(b.get("runId").asLong()).isEqualTo(1);
-        assertThat(b.get("trainNo").asText()).isEqualTo("99001");
-        assertThat(b.get("runDate").asText()).isEqualTo("2026-11-20");
+        assertThat(b.get("trainNo").asString()).isEqualTo("99001");
+        assertThat(b.get("runDate").asString()).isEqualTo("2026-11-20");
         assertThat(b.get("stops").get(0).get("seq").asInt()).isZero();
-        assertThat(b.get("stops").get(0).get("stationCode").asText()).isEqualTo("MMCT");
-        assertThat(b.get("stops").get(0).get("departure").asText()).isNotBlank();
+        assertThat(b.get("stops").get(0).get("stationCode").asString()).isEqualTo("MMCT");
+        assertThat(b.get("stops").get(0).get("departure").asString()).isNotBlank();
         assertThat(b.get("classes").size()).isPositive();
 
         JsonNode byId = json.readTree(call("/api/v1/runs/1").getContentAsString());

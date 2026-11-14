@@ -1,9 +1,10 @@
 package in.railops.reservation.application.prediction;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -22,7 +23,7 @@ import static org.assertj.core.api.Assertions.within;
  */
 class WaitlistModelTest {
 
-    static final ObjectMapper JSON = new ObjectMapper();
+    static final ObjectMapper JSON = new JsonMapper();
 
     static WaitlistModel model() throws IOException {
         try (InputStream in = WaitlistModelTest.class.getResourceAsStream("/ml/wl-model.json")) {
@@ -34,13 +35,13 @@ class WaitlistModelTest {
     void java_scores_every_golden_case_exactly_as_python_did() throws IOException {
         WaitlistModel m = model();
         JsonNode golden = JSON.readTree(WaitlistModelTest.class.getResourceAsStream("/ml/golden_cases.json"));
-        assertThat(golden.path("modelVersion").asText())
+        assertThat(golden.path("modelVersion").asString())
                 .as("golden file and bundled model come from the same training run").isEqualTo(m.version());
         double tol = golden.path("tolerance").asDouble();
         int n = 0;
         for (JsonNode c : golden.path("cases")) {
-            var in = new WaitlistModel.Input(c.path("train").asText(), LocalDate.parse(c.path("runDate").asText()),
-                    c.path("cls").asText(), "GN", c.path("daysBefore").asDouble(), c.path("party").asInt(),
+            var in = new WaitlistModel.Input(c.path("train").asString(), LocalDate.parse(c.path("runDate").asString()),
+                    c.path("cls").asString(), "GN", c.path("daysBefore").asDouble(), c.path("party").asInt(),
                     c.path("capacity").asInt(), c.path("wlPosition").asInt(), c.path("bookingsLast7").asInt(),
                     c.path("cancelsSoFar").asInt());
             double[] x = m.features(in);

@@ -1,6 +1,6 @@
 package in.railops.payment.contracts;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.payment.contracts.PaymentEvents.*;
 import in.railops.payment.service.RefundService.RefundRequested;
 import in.railops.testsupport.EventContracts;

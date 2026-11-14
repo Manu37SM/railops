@@ -1,10 +1,10 @@
 package in.railops.common.messaging;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 
 import java.util.Map;
 import java.util.UUID;
@@ -45,7 +45,7 @@ public class OutboxWriter {
                     .param("payload", mapper.writeValueAsString(payload))
                     .param("headers", mapper.writeValueAsString(headers == null ? Map.of() : headers))
                     .update();
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("event payload not serializable: " + eventType, e);
         }
         return eventId;

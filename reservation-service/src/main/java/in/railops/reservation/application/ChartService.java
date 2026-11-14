@@ -1,7 +1,6 @@
 package in.railops.reservation.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.common.messaging.OutboxWriter;
 import in.railops.reservation.adapter.out.persistence.BookingRepository;
 import in.railops.reservation.adapter.out.persistence.BookingRepository.BookingKey;
@@ -22,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -210,7 +210,7 @@ public class ChartService {
             cancellations.insert(new NewCancellation(id, b.runDate(), b.id(), b.pnr(),
                     leaving.stream().map(PassengerRow::seqNo).toList(), "CHART", paid, charge, refund,
                     mapper.writeValueAsString(refunds), actor));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(e);
         }
         if (refund.signum() > 0 && b.paymentId() != null) {

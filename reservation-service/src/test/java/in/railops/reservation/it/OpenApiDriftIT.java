@@ -1,11 +1,12 @@
 package in.railops.reservation.it;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.dataformat.yaml.YAMLMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.nio.file.Path;
@@ -26,7 +27,7 @@ class OpenApiDriftIT extends AbstractReservationIT {
 
     static Set<String> operations(JsonNode spec) {
         Set<String> ops = new TreeSet<>();
-        spec.path("paths").fields().forEachRemaining(p -> p.getValue().fieldNames().forEachRemaining(m -> {
+        spec.path("paths").properties().iterator().forEachRemaining(p -> p.getValue().propertyNames().iterator().forEachRemaining(m -> {
             if (Set.of("get", "post", "put", "patch", "delete").contains(m)) {
                 ops.add(m.toUpperCase() + " " + p.getKey().replaceAll("\\{[^}]+}", "{}"));
             }
@@ -37,7 +38,7 @@ class OpenApiDriftIT extends AbstractReservationIT {
     @Test
     void documented_and_implemented_public_operations_match() throws Exception {
         String live = mvc.perform(get("/v3/api-docs")).andReturn().getResponse().getContentAsString();
-        Set<String> implemented = operations(new ObjectMapper().readTree(live));
+        Set<String> implemented = operations(new JsonMapper().readTree(live));
         implemented.removeIf(o -> o.contains("/internal/"));   // service-to-service: contracts/http, not public docs
         Set<String> documented = operations(new YAMLMapper().readTree(
                 Path.of("..", "docs", "openapi", "reservation-v1.yaml").toFile()));

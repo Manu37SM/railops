@@ -14,7 +14,7 @@
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -22,11 +22,15 @@
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+      <artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.springframework.kafka</groupId>
-      <artifactId>spring-kafka</artifactId>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-restclient</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-kafka</artifactId>
     </dependency>
     <dependency>
       <groupId>io.micrometer</groupId>
@@ -38,8 +42,8 @@
       <scope>test</scope>
     </dependency>
     <!-- Only for the Migrate entry point; each service brings Flyway itself. -->
-    <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-core</artifactId><optional>true</optional></dependency>
-    <dependency><groupId>in.railops</groupId><artifactId>railops-test-support</artifactId><version>${project.version}</version><scope>test</scope></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-flyway</artifactId><optional>true</optional></dependency>
+    <dependency><groupId>in.railops</groupId><artifactId>railops-test-support</artifactId><scope>test</scope></dependency>
     <dependency><groupId>org.springframework.kafka</groupId><artifactId>spring-kafka-test</artifactId><scope>test</scope></dependency>
   </dependencies>
 </project>

@@ -10,6 +10,7 @@ public enum TravelClass {
     public final String code;
     public final boolean seated;
 
+    @JsonCreator
     TravelClass(String code, boolean seated) {
         this.code = code;
         this.seated = seated;

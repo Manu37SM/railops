@@ -27,11 +27,11 @@ The services talk through **Kafka** (events, with dead-letter topics) and share 
 service, separate owner and app logins). **Redis** holds short-lived data: rate limits, cached availability and the
 waiting room.
 
-Stack: Java 21, Spring Boot 3.5, PostgreSQL 16+, Kafka, Redis, Angular 22.
+Stack: Java 25, Spring Boot 4.1 (Spring Framework 7, Jackson 3), Spring Cloud 2025.1, PostgreSQL 16+, Kafka, Redis, Angular 22.
 
 ## Run it locally
 
-You need Java 21, Maven, Node 22, PostgreSQL and Redis. The local-stack scripts expect **Linux or WSL** (they start
+You need Java 25, Maven, Node 22, PostgreSQL and Redis. The local-stack scripts expect **Linux or WSL** (they start
 PostgreSQL with `service`); on plain Windows use Docker Compose instead. `gen-secrets.sh` also runs in Git Bash.
 
 ```bash

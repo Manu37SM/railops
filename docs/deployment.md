@@ -14,7 +14,7 @@ scripts/compose_sim.py, web_edge.py   run the compose configuration without a Do
 
 | | Service images | Web image |
 |---|---|---|
-| Base | `eclipse-temurin:21-jre-noble`, pinned by digest | `nginxinc/nginx-unprivileged:1.28-alpine`, pinned by digest |
+| Base | `eclipse-temurin:25-jre-noble`, pinned by digest | `nginxinc/nginx-unprivileged:1.28-alpine`, pinned by digest |
 | User | uid/gid 10001, non-root | uid 101 |
 | Layers | Boot layers: dependencies (~72 MB) → loader → snapshots → application (~1 MB) | static bundle |
 | Filesystem | read-only root; writable `/tmp` only | read-only; `/tmp` and nginx cache |

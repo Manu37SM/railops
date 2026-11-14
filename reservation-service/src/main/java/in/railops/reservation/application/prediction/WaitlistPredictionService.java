@@ -1,7 +1,6 @@
 package in.railops.reservation.application.prediction;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.reservation.adapter.out.persistence.BookingRepository;
 import in.railops.reservation.adapter.out.persistence.PredictionRepository;
 import in.railops.reservation.adapter.out.persistence.PredictionRepository.PoolState;
@@ -178,7 +177,7 @@ public class WaitlistPredictionService {
             }
             String fj = json.writeValueAsString(f);
             tx.inNewTransaction(() -> repo.log(model.version(), now, runId, runDate, bookingId, cls, quota, fj, p));
-        } catch (JsonProcessingException | RuntimeException e) {
+        } catch (RuntimeException e) {
             // The passenger still gets the estimate; we lose one monitoring sample.
             meters.counter("prediction.wl.log_failures").increment();
         }

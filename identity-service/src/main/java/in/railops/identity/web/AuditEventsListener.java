@@ -1,8 +1,7 @@
 package in.railops.identity.web;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.common.messaging.EventEnvelope;
 import in.railops.identity.service.AuditService;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -29,7 +28,7 @@ public class AuditEventsListener {
 
     @KafkaListener(topics = "audit.events.v1", groupId = "identity-audit",
             autoStartup = "${railops.audit.consume:true}")
-    public void on(ConsumerRecord<String, String> record) throws JsonProcessingException {
+    public void on(ConsumerRecord<String, String> record) {
         EventEnvelope env = mapper.readValue(record.value(), EventEnvelope.class);
         Map<String, Object> p = mapper.convertValue(env.payload(), new TypeReference<>() {
         });

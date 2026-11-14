@@ -1,10 +1,10 @@
 package in.railops.identity.it;
-
+import tools.jackson.databind.json.JsonMapper;
 import in.railops.identity.service.AuthService;
 import in.railops.testsupport.ItPostgres;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -14,7 +14,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 import java.util.UUID;
@@ -44,7 +44,7 @@ class AccountIT {
     @Autowired MockMvc mvc;
     @Autowired AuthService auth;
     @Autowired JdbcClient jdbc;
-    final ObjectMapper json = new ObjectMapper();
+    final ObjectMapper json = new JsonMapper();
 
     record Passenger(UUID id, String email, String access, String refresh) {
     }
@@ -53,7 +53,7 @@ class AccountIT {
         String email = "acct." + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
         UUID id = auth.registerPassenger(email, PW, "9" + (100_000_000 + ThreadLocalRandom.current().nextInt(800_000_000)), "127.0.0.1");
         var b = json.readTree(post("/api/v1/auth/app/login", null, Map.of("email", email, "password", PW)).getContentAsString());
-        return new Passenger(id, email, b.get("accessToken").asText(), b.get("refreshToken").asText());
+        return new Passenger(id, email, b.get("accessToken").asString(), b.get("refreshToken").asString());
     }
 
     MockHttpServletResponse post(String path, String bearer, Map<String, String> body) throws Exception {

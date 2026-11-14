@@ -1,7 +1,7 @@
 package in.railops.reservation.application.prediction;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -56,12 +56,12 @@ public final class WaitlistModel {
             throw new IllegalStateException("unsupported featureVersion " + doc.path("featureVersion"));
         }
         List<String> names = new ArrayList<>();
-        doc.path("features").forEach(n -> names.add(n.asText()));
+        doc.path("features").forEach(n -> names.add(n.asString()));
         if (!names.equals(SUPPORTED_FEATURES)) {
             throw new IllegalStateException("model features " + names + " != supported " + SUPPORTED_FEATURES);
         }
-        this.modelVersion = require(doc, "modelVersion").asText();
-        this.trainedOn = doc.path("trainedOn").asText("");
+        this.modelVersion = require(doc, "modelVersion").asString();
+        this.trainedOn = doc.path("trainedOn").asString("");
         this.mean = doubles(require(doc, "mean"), names.size());
         this.std = doubles(require(doc, "std"), names.size());
         this.coef = doubles(require(doc, "coef"), names.size());
@@ -85,7 +85,7 @@ public final class WaitlistModel {
         JsonNode prior = require(doc, "trainPrior");
         this.globalPrior = prior.path("global").asDouble();
         Map<String, Double> byTrain = new HashMap<>();
-        prior.path("byTrain").fields().forEachRemaining(e -> byTrain.put(e.getKey(), e.getValue().asDouble()));
+        prior.path("byTrain").properties().iterator().forEachRemaining(e -> byTrain.put(e.getKey(), e.getValue().asDouble()));
         this.trainPrior = Map.copyOf(byTrain);
         List<int[]> windows = new ArrayList<>();
         doc.path("festivalWindows").forEach(w -> windows.add(new int[]{w.get(0).asInt(), w.get(1).asInt(),
@@ -95,7 +95,7 @@ public final class WaitlistModel {
         doc.path("summerMonths").forEach(m -> summer.add(m.asInt()));
         this.summerMonths = Set.copyOf(summer);
         Map<String, double[]> c = new HashMap<>();
-        require(doc, "clip").fields().forEachRemaining(e -> c.put(e.getKey(), doubles(e.getValue(), 2)));
+        require(doc, "clip").properties().iterator().forEachRemaining(e -> c.put(e.getKey(), doubles(e.getValue(), 2)));
         for (String k : List.of("wl_ratio", "days_before", "party", "velocity", "cancel_ratio")) {
             if (!c.containsKey(k)) {
                 throw new IllegalStateException("clip bounds missing for " + k);
@@ -103,7 +103,7 @@ public final class WaitlistModel {
         }
         this.clip = Map.copyOf(c);
         List<Band> b = new ArrayList<>();
-        doc.path("bands").forEach(n -> b.add(new Band(n.path("name").asText(), n.path("below").asDouble())));
+        doc.path("bands").forEach(n -> b.add(new Band(n.path("name").asString(), n.path("below").asDouble())));
         if (b.isEmpty()) {
             throw new IllegalStateException("no probability bands");
         }

@@ -1,6 +1,6 @@
 package in.railops.payment;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.common.messaging.EventEnvelope;
 import in.railops.common.messaging.OutboxRelay;
 import in.railops.common.messaging.OutboxWriter;

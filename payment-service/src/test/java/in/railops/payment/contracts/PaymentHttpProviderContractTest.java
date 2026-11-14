@@ -1,6 +1,6 @@
 package in.railops.payment.contracts;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.payment.service.PaymentService;
 import in.railops.payment.web.PaymentControllers;
 import in.railops.testsupport.HttpContract;
@@ -8,7 +8,8 @@ import in.railops.testsupport.ProductionObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -34,9 +35,9 @@ class PaymentHttpProviderContractTest {
                 UUID.fromString("0b3f6a2e-58c1-4d7e-9a8b-2f1c3d4e5f60"), "http://gw/checkout/ord_1",
                 new BigDecimal("2915.00"), "CREATED"));
         MockMvc mvc = MockMvcBuilders.standaloneSetup(new PaymentControllers.InternalPayments(service))
-                .setMessageConverters(new MappingJackson2HttpMessageConverter(mapper)).build();
+                .setMessageConverters(new JacksonJsonHttpMessageConverter((JsonMapper) mapper)).build();
 
-        MvcResult res = mvc.perform(post(contract.request().get("path").asText())
+        MvcResult res = mvc.perform(post(contract.request().get("path").asString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(contract.request().get("body"))))
                 .andReturn();

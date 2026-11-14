@@ -1,7 +1,8 @@
 package in.railops.notification;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 import in.railops.testsupport.EventContracts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class NotificationContractTest {
 
-    static final ObjectMapper M = new ObjectMapper();
+    static final ObjectMapper M = new JsonMapper();
 
     /** One schema-valid payload per templated event type. */
     static final Map<String, String> SAMPLES = Map.of(
@@ -56,7 +57,7 @@ class NotificationContractTest {
     @MethodSource("types")
     void a_payload_missing_any_field_the_template_reads_is_rejected_not_sent(String type) throws Exception {
         ObjectNode full = (ObjectNode) M.readTree(SAMPLES.get(type));
-        full.fieldNames().forEachRemaining(f -> {
+        full.propertyNames().iterator().forEachRemaining(f -> {
             ObjectNode broken = full.deepCopy();
             broken.remove(f);
             try {

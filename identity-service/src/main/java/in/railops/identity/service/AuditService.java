@@ -1,10 +1,9 @@
 package in.railops.identity.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 import in.railops.common.web.PiiMasker;
 import in.railops.identity.domain.AuditEntry;
 import in.railops.identity.domain.Repositories.AuditEntryRepository;
@@ -13,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -170,7 +170,7 @@ public class AuditService {
     private String canonicalJson(Map<String, ?> m) {
         try {
             return canonical.writeValueAsString(new TreeMap<>(m));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(e);
         }
     }
@@ -179,7 +179,7 @@ public class AuditService {
         try {
             return Optional.ofNullable(canonical.readValue(json, new TypeReference<Map<String, Object>>() {
             })).orElse(Map.of());
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("corrupt audit detail", e);
         }
     }

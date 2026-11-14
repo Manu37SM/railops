@@ -1,6 +1,6 @@
 package in.railops.reservation.adapter.in.kafka;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import in.railops.common.messaging.EventEnvelope;
 import in.railops.common.messaging.Topics;
 import in.railops.reservation.application.cache.AvailabilityCache;

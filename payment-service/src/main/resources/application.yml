@@ -43,10 +43,11 @@ spring:
     listener:
       ack-mode: record
   jackson:
-    serialization:
-      write-dates-as-timestamps: false
     deserialization:
       fail-on-unknown-properties: false
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false
 
 server:
   shutdown: graceful
@@ -74,14 +75,3 @@ railops:
     webhook-secret: ${GATEWAY_WEBHOOK_SECRET:}
   reconcile:
     stale-after: PT15M
----
-# Phase 6: Razorpay TEST MODE ("razorpay" profile instead of "sim"). Test keys only: the gateway refuses rzp_live_.
-spring.config.activate.on-profile: razorpay
-railops:
-  razorpay:
-    key-id: ${RAZORPAY_KEY_ID}
-    key-secret: ${RAZORPAY_KEY_SECRET}
-    webhook-secret: ${RAZORPAY_WEBHOOK_SECRET}
-    # Where Razorpay sends the passenger after paying; {pnr} is filled in. The RailLens booking page.
-    callback-url: ${RAZORPAY_CALLBACK_URL:https://rail-lens-frontend.vercel.app/bookings/{pnr}}
-

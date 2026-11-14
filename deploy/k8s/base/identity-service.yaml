@@ -61,7 +61,7 @@ spec:
         # never sees them (spring.flyway.enabled=false, DML-only role). Flyway's lock serialises concurrent pods.
         - name: migrate
           image: europe-docker.pkg.dev/railops-prod/railops/identity-service:IMAGE_TAG
-          command: ["java", "-cp", "/opt/app/BOOT-INF/classes:/opt/app/BOOT-INF/lib/*", "in.railops.common.db.Migrate"]
+          command: ["java", "-cp", "/opt/app/app.jar:/opt/app/lib/*", "in.railops.common.db.Migrate"]
           env:
             - {name: DB_URL, value: "jdbc:postgresql://127.0.0.1:5432/railops"}
             - {name: DB_MIGRATION_USER, value: identity_owner}

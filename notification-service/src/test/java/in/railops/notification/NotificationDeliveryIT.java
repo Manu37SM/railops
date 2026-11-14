@@ -1,6 +1,7 @@
 package in.railops.notification;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sun.net.httpserver.HttpServer;
 import in.railops.common.security.ServiceTokenClient;
 import in.railops.testsupport.HttpContract;
@@ -60,7 +61,7 @@ class NotificationDeliveryIT {
     @MockitoSpyBean NotificationApplication.SmsSender sms;
     @Autowired NotificationApplication.Notifier notifier;
     @Autowired JdbcClient jdbc;
-    final ObjectMapper json = new ObjectMapper();
+    final ObjectMapper json = new JsonMapper();
 
     @BeforeEach
     void setUp() {

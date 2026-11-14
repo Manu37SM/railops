@@ -1,9 +1,8 @@
 package in.railops.common.messaging;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
@@ -12,6 +11,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.core.JacksonException;
 
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
@@ -220,7 +220,7 @@ public class OutboxRelay {
             });
             extra.forEach((k, v) -> rec.headers().add(k, v.getBytes(StandardCharsets.UTF_8)));
             return rec;
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("corrupt outbox row " + r.id(), e);
         }
     }
